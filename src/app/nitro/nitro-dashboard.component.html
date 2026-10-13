@@ -1,0 +1,1490 @@
+<ActionBar title="NITRO // NS" flat="true" class="bg-obsidian text-white">
+  <ActionItem
+    ios.position="right"
+    text="Re-Bench"
+    (tap)="runFullBenchmarks()"
+  ></ActionItem>
+</ActionBar>
+
+<GridLayout
+  [columns]="panes()?.columns || '*'"
+  rows="*"
+  class="bg-obsidian"
+  (layoutChanged)="onHostLayout($event)"
+>
+  <!-- LEFT PANE (OR FULL SCREEN WHEN FOLDED): TELEMETRY & BENCHMARKS -->
+  <GridLayout col="0" rows="auto, auto, *" class="bg-obsidian">
+  <!-- TOP TELEMETRY STATUS RIBBON -->
+  <GridLayout
+    row="0"
+    columns="auto, *, auto"
+    class="px-4 pt-2 pb-3 bg-obsidian"
+    iosOverflowSafeAreaEnabled="false"
+  >
+    <StackLayout col="0" orientation="horizontal" verticalAlignment="center">
+      <Label
+        text="●"
+        class="text-emerald-400 text-xs mr-1.5"
+        verticalAlignment="center"
+        iosOverflowSafeArea="false"
+      ></Label>
+      <Label
+        text="JSI V8 ISOLATE ACTIVE"
+        class="text-emerald-400 text-xs font-bold"
+        verticalAlignment="center"
+      ></Label>
+    </StackLayout>
+
+    <Label
+      col="1"
+      [text]="nitro.diagnostics().v8IsolateAddress"
+      class="text-slate-400 text-xs text-center font-mono"
+      verticalAlignment="center"
+    ></Label>
+
+    <Label
+      col="2"
+      [text]="nitro.averageSpeedup() + ' AVG'"
+      class="pill-emerald text-xs font-bold px-2.5 py-0.5"
+      verticalAlignment="center"
+      iosOverflowSafeArea="false"
+    ></Label>
+  </GridLayout>
+
+  <!-- SEGMENTED NAVIGATION BAR -->
+  <GridLayout
+    row="1"
+    [columns]="nitro.isAndroid ? '*, *, *' : '*, *, *, *'"
+    class="mx-4 mb-3 p-1 bg-surface rounded-xl border-subtle"
+    iosOverflowSafeAreaEnabled="false"
+  >
+    <Label
+      col="0"
+      text="Deck"
+      (tap)="selectTab('overview')"
+      iosOverflowSafeArea="false"
+      [class]="
+        nitro.activeTab() === 'overview'
+          ? 'bg-emerald-500 text-slate-950 font-bold text-xs text-center py-2 rounded-lg'
+          : 'text-slate-400 font-semibold text-xs text-center py-2'
+      "
+    ></Label>
+    <Label
+      col="1"
+      text="Benchmarks"
+      (tap)="selectTab('benchmarks')"
+      iosOverflowSafeArea="false"
+      [class]="
+        nitro.activeTab() === 'benchmarks'
+          ? 'bg-emerald-500 text-slate-950 font-bold text-xs text-center py-2 rounded-lg'
+          : 'text-slate-400 font-semibold text-xs text-center py-2'
+      "
+    ></Label>
+    @if (!nitro.isAndroid) {
+      <Label
+        col="2"
+        text="Swift 6"
+        (tap)="selectTab('swift6')"
+        iosOverflowSafeArea="false"
+        [class]="
+          nitro.activeTab() === 'swift6'
+            ? 'bg-cyan-400 text-slate-950 font-bold text-xs text-center py-2 rounded-lg'
+            : 'text-slate-400 font-semibold text-xs text-center py-2'
+        "
+      ></Label>
+    }
+    <Label
+      [col]="nitro.isAndroid ? 2 : 3"
+      text="0-Copy DSP"
+      (tap)="selectTab('zerocopy')"
+      iosOverflowSafeArea="false"
+      [class]="
+        nitro.activeTab() === 'zerocopy'
+          ? 'bg-indigo-500 text-white font-bold text-xs text-center py-2 rounded-lg'
+          : 'text-slate-400 font-semibold text-xs text-center py-2'
+      "
+    ></Label>
+  </GridLayout>
+
+  <!-- MAIN CONTENT SCROLLVIEW (keeps default overflow for scroll viewport) -->
+  <ScrollView row="2">
+    <StackLayout class="px-4 pb-12" iosOverflowSafeAreaEnabled="false">
+      <!-- COMPACT WEBGPU RALLY STAGE WHEN SINGLE-SCREEN / FOLDED -->
+      @if (!panes()) {
+        <ns-rally-stage [compact]="true"></ns-rally-stage>
+      }
+
+      <!-- ================================================================ -->
+      <!-- TAB 1: COMMAND DECK (OVERVIEW)                                   -->
+      <!-- ================================================================ -->
+      @if (nitro.activeTab() === 'overview') {
+        <!-- HERO BREAKTHROUGH CARD -->
+        <StackLayout
+          class="p-4 mb-4 rounded-2xl bg-surface border-emerald-glow"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <GridLayout columns="*, auto" class="mb-1.5">
+            <Label
+              col="0"
+              text="ZERO-RN NITROMODULES HOST"
+              class="text-emerald-400 text-xs font-bold"
+              verticalAlignment="center"
+            ></Label>
+            <Label
+              col="1"
+              [text]="'V8 v' + nitro.diagnostics().v8Version"
+              class="pill-emerald text-xxs font-bold px-2.5 py-0.5"
+              iosOverflowSafeArea="false"
+            ></Label>
+          </GridLayout>
+
+          <Label
+            [text]="
+              nitro.isAndroid
+                ? 'NativeScript JSI + C++20 NDK HybridObjects'
+                : 'NativeScript JSI + C++20 & Swift 6 HybridObjects'
+            "
+            class="text-white text-xl font-extrabold mb-1"
+            textWrap="true"
+          ></Label>
+          <Label
+            [text]="
+              nitro.isAndroid
+                ? 'Running directly on JSIInstaller::install (rnv8::V8Runtime) inside NativeScript\'s Android V8 isolate with Vite HMR — zero React Native dependencies.'
+                : 'Running directly on +[JSIRuntime runtime] (rnv8::V8Runtime) inside NativeScript\'s V8 isolate with Vite HMR — zero React Native dependencies.'
+            "
+            class="text-slate-400 text-xs mb-3"
+            textWrap="true"
+          ></Label>
+
+          <!-- 3 PILLAR METRICS -->
+          <GridLayout columns="*, *, *" class="mt-1" iosOverflowSafeAreaEnabled="false">
+            <StackLayout
+              col="0"
+              class="p-2.5 mr-1.5 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <Label
+                text="AVG SPEEDUP"
+                class="text-slate-400 text-xxs font-bold"
+              ></Label>
+              <Label
+                [text]="nitro.averageSpeedup()"
+                class="text-emerald-400 text-lg font-extrabold mt-0.5"
+              ></Label>
+              <Label
+                [text]="nitro.isAndroid ? 'vs JNI Bridge' : 'vs ObjC FFI'"
+                class="text-slate-500 text-xxs"
+              ></Label>
+            </StackLayout>
+
+            <StackLayout
+              col="1"
+              class="p-2.5 mx-1 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <Label
+                text="0-COPY DSP"
+                class="text-slate-400 text-xxs font-bold"
+              ></Label>
+              <Label
+                [text]="nitro.zeroCopyTelemetry().throughputGbPerSec + ' GB/s'"
+                class="text-cyan-400 text-sm font-extrabold mt-0.5"
+              ></Label>
+              <Label
+                text="V8 BackingStore"
+                class="text-slate-500 text-xxs"
+              ></Label>
+            </StackLayout>
+
+            <StackLayout
+              col="2"
+              class="p-2.5 ml-1.5 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <Label
+                text="NATIVESTATE"
+                class="text-slate-400 text-xxs font-bold"
+              ></Label>
+              <Label
+                [text]="
+                  nitro.formatInt(
+                    nitro.diagnostics().disposedNativeStates +
+                      nitro.diagnostics().disposedHybridObjects
+                  )
+                "
+                class="text-indigo-400 text-lg font-extrabold mt-0.5"
+              ></Label>
+              <Label
+                text="GC Verified"
+                class="text-slate-500 text-xxs"
+              ></Label>
+            </StackLayout>
+          </GridLayout>
+        </StackLayout>
+
+        <!-- LIVE RUNTIME DIAGNOSTICS MATRIX -->
+        <StackLayout
+          class="p-4 mb-4 rounded-2xl bg-surface border-subtle"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <GridLayout columns="*, auto" class="mb-2.5">
+            <Label
+              col="0"
+              text="JSI RUNTIME TELEMETRY"
+              class="text-slate-200 text-xs font-bold"
+              verticalAlignment="center"
+            ></Label>
+            <Label
+              col="1"
+              text="rnv8::V8Runtime"
+              class="pill-cyan text-xxs font-bold px-2.5 py-0.5"
+              iosOverflowSafeArea="false"
+            ></Label>
+          </GridLayout>
+
+          <GridLayout columns="*, auto" class="py-1.5">
+            <Label
+              col="0"
+              text="V8 Isolate Pointer"
+              class="text-slate-400 text-xs"
+            ></Label>
+            <Label
+              col="1"
+              [text]="nitro.diagnostics().v8IsolateAddress"
+              class="text-emerald-400 text-xs font-mono font-bold"
+            ></Label>
+          </GridLayout>
+
+          <GridLayout columns="*, auto" class="py-1.5">
+            <Label
+              col="0"
+              text="facebook::jsi::Runtime*"
+              class="text-slate-400 text-xs"
+            ></Label>
+            <Label
+              col="1"
+              [text]="nitro.diagnostics().jsiRuntimeAddress"
+              class="text-cyan-400 text-xs font-mono font-bold"
+            ></Label>
+          </GridLayout>
+
+          <GridLayout columns="*, auto" class="py-1.5">
+            <Label
+              col="0"
+              text="ArrayBuffer BackingStore*"
+              class="text-slate-400 text-xs"
+            ></Label>
+            <Label
+              col="1"
+              [text]="nitro.zeroCopyTelemetry().backingStoreAddress"
+              class="text-indigo-400 text-xs font-mono font-bold"
+            ></Label>
+          </GridLayout>
+
+          <GridLayout columns="*, auto" class="py-1.5">
+            <Label
+              col="0"
+              text="jsi::NativeState + GC Pressure"
+              class="text-slate-400 text-xs"
+            ></Label>
+            <Label
+              col="1"
+              [text]="
+                nitro.diagnostics().nativeStateSupported
+                  ? 'VERIFIED (Field #2)'
+                  : 'UNSUPPORTED'
+              "
+              class="text-emerald-400 text-xs font-bold"
+            ></Label>
+          </GridLayout>
+
+          <GridLayout columns="*, auto" class="py-1.5">
+            <Label
+              col="0"
+              [text]="
+                nitro.isAndroid
+                  ? 'C++20 NDK / libjsi Bridge'
+                  : 'Pure Swift 6 C-ABI Bridge'
+              "
+              class="text-slate-400 text-xs"
+            ></Label>
+            <Label
+              col="1"
+              [text]="
+                nitro.isAndroid ? 'ACTIVE (Zero-JNI Copy)' : 'ACTIVE (Zero-@objc)'
+              "
+              class="text-cyan-400 text-xs font-bold"
+            ></Label>
+          </GridLayout>
+
+          <StackLayout class="pt-1.5" iosOverflowSafeAreaEnabled="false">
+            <Label
+              text="Registered HybridObjects"
+              class="text-slate-400 text-xxs font-bold mb-1"
+            ></Label>
+            <Label
+              [text]="nitro.registeredModules().join('  •  ')"
+              class="text-slate-200 text-xs font-mono font-semibold"
+              textWrap="true"
+            ></Label>
+          </StackLayout>
+        </StackLayout>
+
+        <!-- QUICK LAB ACTIONS -->
+        <GridLayout columns="*, *" class="mb-4" iosOverflowSafeAreaEnabled="false">
+          <Button
+            col="0"
+            iosOverflowSafeArea="false"
+            [text]="
+              nitro.isRunningBenchmarks()
+                ? 'Running 100k Suite...'
+                : '⚡ Run 100k Benchmark'
+            "
+            (tap)="selectTab('benchmarks'); runFullBenchmarks()"
+            class="btn-primary-emerald mr-1.5 py-3 text-xs"
+          ></Button>
+          <Button
+            col="1"
+            iosOverflowSafeArea="false"
+            [text]="
+              nitro.isAndroid
+                ? '🚀 0-Copy DSP & State Lab'
+                : '🚀 Swift 6 & 0-Copy Lab'
+            "
+            (tap)="selectTab(nitro.isAndroid ? 'zerocopy' : 'swift6')"
+            class="btn-primary-cyan ml-1.5 py-3 text-xs"
+          ></Button>
+        </GridLayout>
+
+        <!-- MINI BENCHMARK SUMMARY PREVIEW ON OVERVIEW -->
+        <StackLayout
+          class="p-4 rounded-2xl bg-surface border-subtle"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <GridLayout columns="*, auto" class="mb-3">
+            <Label
+              col="0"
+              text="HEAD-TO-HEAD BENCHMARK SNAPSHOT"
+              class="text-slate-200 text-xs font-bold"
+              verticalAlignment="center"
+            ></Label>
+            <Label
+              col="1"
+              text="View All →"
+              (tap)="selectTab('benchmarks')"
+              class="text-emerald-400 text-xs font-bold"
+              verticalAlignment="center"
+            ></Label>
+          </GridLayout>
+
+          @for (card of nitro.benchmarkCards(); track card.id) {
+            <GridLayout
+              columns="*, auto"
+              [nsRouterLink]="['/benchmark', card.id]"
+              class="p-3 mb-2 rounded-xl bg-surface-elevated"
+              iosOverflowSafeArea="false"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <StackLayout col="0" class="mr-2">
+                <Label
+                  [text]="card.title"
+                  class="text-white text-xs font-bold"
+                ></Label>
+                <Label
+                  [text]="card.speedupDetail"
+                  class="text-slate-400 text-2xs mt-0.5"
+                  textWrap="true"
+                ></Label>
+              </StackLayout>
+              <Label
+                col="1"
+                [text]="card.speedupHeadline"
+                class="pill-emerald text-xs font-extrabold px-2.5 py-1"
+                verticalAlignment="center"
+                iosOverflowSafeArea="false"
+              ></Label>
+            </GridLayout>
+          }
+        </StackLayout>
+      }
+
+      <!-- ================================================================ -->
+      <!-- TAB 2: ANGLE #3 — HEAD-TO-HEAD BENCHMARK LAB                     -->
+      <!-- ================================================================ -->
+      @if (nitro.activeTab() === 'benchmarks') {
+        <StackLayout
+          class="p-4 mb-4 rounded-2xl bg-surface border-emerald-glow"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <GridLayout columns="*, auto" class="mb-2">
+            <StackLayout col="0">
+              <Label
+                text="ANGLE #3 • EMPIRICAL JSI BENCHMARK SUITE"
+                class="text-emerald-400 text-xxs font-bold"
+              ></Label>
+              <Label
+                [text]="
+                  nitro.isAndroid
+                    ? 'Apples-to-Apples (TSC) & JSI vs. JNI'
+                    : 'Apples-to-Apples (TSC) & JSI vs. ObjC'
+                "
+                class="text-white text-lg font-extrabold mt-0.5"
+                textWrap="true"
+              ></Label>
+            </StackLayout>
+            <Button
+              col="1"
+              iosOverflowSafeArea="false"
+              [text]="nitro.isRunningBenchmarks() ? 'Running...' : 'Run 100k'"
+              (tap)="runFullBenchmarks()"
+              class="btn-primary-emerald px-3 py-2 text-xs"
+              verticalAlignment="center"
+            ></Button>
+          </GridLayout>
+          <Label
+            [text]="
+              nitro.isAndroid
+                ? 'Includes Apples-to-Apples C-to-C (JSI vs N-API Wrapper) and JNI-to-JNI (Nitro JNI Call vs NativeScript Method Call) alongside Classic JNI benchmarks.'
+                : 'Includes Apples-to-Apples C-to-C (JSI vs NativeScript Direct C Metadata + interop.handleof) and Swift-to-Swift (Nitro → Swift vs NativeScript → Swift) alongside Classic ObjC benchmarks.'
+            "
+            class="text-slate-400 text-xs mb-3"
+            textWrap="true"
+          ></Label>
+
+          <!-- BENCHMARK CATEGORY FILTER PILLS -->
+          <GridLayout
+            columns="*, *, *"
+            class="p-1 bg-surface-elevated rounded-xl"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <Label
+              col="0"
+              text="All Suites"
+              (tap)="selectBenchmarkCategory('all')"
+              iosOverflowSafeArea="false"
+              [class]="
+                nitro.benchmarkCategoryFilter() === 'all'
+                  ? 'bg-emerald-500 text-slate-950 font-bold text-xxs text-center py-1.5 rounded-lg'
+                  : 'text-slate-400 font-semibold text-xxs text-center py-1.5'
+              "
+            ></Label>
+            <Label
+              col="1"
+              text="Apples-to-Apples"
+              (tap)="selectBenchmarkCategory('tsc-apples')"
+              iosOverflowSafeArea="false"
+              [class]="
+                nitro.benchmarkCategoryFilter() === 'tsc-apples'
+                  ? 'bg-cyan-400 text-slate-950 font-bold text-xxs text-center py-1.5 rounded-lg'
+                  : 'text-slate-400 font-semibold text-xxs text-center py-1.5'
+              "
+            ></Label>
+            <Label
+              col="2"
+              text="Classic vs. JSI"
+              (tap)="selectBenchmarkCategory('classic')"
+              iosOverflowSafeArea="false"
+              [class]="
+                nitro.benchmarkCategoryFilter() === 'classic'
+                  ? 'bg-indigo-500 text-white font-bold text-xxs text-center py-1.5 rounded-lg'
+                  : 'text-slate-400 font-semibold text-xxs text-center py-1.5'
+              "
+            ></Label>
+          </GridLayout>
+        </StackLayout>
+
+        <!-- CATEGORY A: APPLES-TO-APPLES (TSC) BENCHMARKS -->
+        @if (
+          nitro.benchmarkCategoryFilter() === 'all' ||
+          nitro.benchmarkCategoryFilter() === 'tsc-apples'
+        ) {
+          <StackLayout
+            class="p-3.5 mb-3 rounded-2xl bg-surface border-cyan-glow"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <Label
+              text="APPLES-TO-APPLES (TSC) • EQUIVALENT WORK & MARSHALING"
+              class="text-cyan-400 text-xxs font-bold"
+            ></Label>
+            <Label
+              [text]="
+                nitro.isAndroid
+                  ? 'C-to-C (JSI vs. N-API C Wrapper) & JNI-to-JNI (Nitro JNI Call vs. NativeScript Method Call)'
+                  : 'C-to-C (JSI vs. NativeScript Direct C + interop.handleof) & Swift-to-Swift (Nitro → Swift vs. NativeScript → Swift)'
+              "
+              class="text-slate-200 text-xs font-semibold mt-0.5"
+              textWrap="true"
+            ></Label>
+          </StackLayout>
+
+          @for (card of nitro.tscApplesToApplesCards(); track card.id) {
+            <StackLayout
+              [nsRouterLink]="['/benchmark', card.id]"
+              class="p-4 mb-3.5 rounded-2xl bg-surface border-subtle"
+              iosOverflowSafeArea="false"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <GridLayout columns="auto, *, auto" class="mb-1.5">
+                <Label
+                  col="0"
+                  [text]="card.category"
+                  class="pill-cyan text-xxs font-bold px-2.5 py-0.5 mr-2"
+                  iosOverflowSafeArea="false"
+                ></Label>
+                <Label
+                  col="1"
+                  [text]="card.iterationsLabel"
+                  class="text-slate-400 text-xs"
+                  verticalAlignment="center"
+                ></Label>
+                <Label
+                  col="2"
+                  [text]="card.speedupHeadline"
+                  class="pill-emerald text-xs font-extrabold px-2.5 py-0.5"
+                  iosOverflowSafeArea="false"
+                ></Label>
+              </GridLayout>
+
+              <Label
+                [text]="card.title"
+                class="text-white text-base font-extrabold mb-0.5"
+                textWrap="true"
+              ></Label>
+              <Label
+                [text]="card.subtitle"
+                class="text-slate-400 text-xs mb-3"
+                textWrap="true"
+              ></Label>
+
+              @for (lane of card.lanes; track lane.label) {
+                <StackLayout class="mb-2.5" iosOverflowSafeAreaEnabled="false">
+                  <GridLayout columns="*, auto, auto" class="mb-1">
+                    <Label
+                      col="0"
+                      [text]="lane.label"
+                      class="text-slate-200 text-xs font-semibold"
+                      textWrap="true"
+                    ></Label>
+                    <Label
+                      col="1"
+                      [text]="lane.durationMs + ' ms'"
+                      [class]="lane.accentClass + ' text-xs font-extrabold mr-2'"
+                    ></Label>
+                    <Label
+                      col="2"
+                      [text]="lane.opsPerSec"
+                      class="text-slate-400 text-2xs font-mono"
+                    ></Label>
+                  </GridLayout>
+
+                  <GridLayout
+                    columns="*, auto"
+                    class="bg-surface-elevated rounded-full h-2.5 overflow-hidden"
+                    iosOverflowSafeArea="false"
+                  >
+                    <StackLayout
+                      col="0"
+                      horizontalAlignment="left"
+                      [width]="lane.relativeWidthPercent + '%'"
+                      [backgroundColor]="lane.barColor"
+                      class="h-2.5 rounded-full"
+                      iosOverflowSafeArea="false"
+                    ></StackLayout>
+                  </GridLayout>
+                </StackLayout>
+              }
+
+              <GridLayout columns="*, auto" class="mt-1 pt-2">
+                <Label
+                  col="0"
+                  [text]="card.verificationNote"
+                  class="text-slate-500 text-xxs font-mono"
+                  textWrap="true"
+                ></Label>
+                <Label
+                  col="1"
+                  text="Inspect →"
+                  class="text-cyan-400 text-xs font-bold ml-2"
+                ></Label>
+              </GridLayout>
+            </StackLayout>
+          }
+        }
+
+        <!-- CATEGORY B: NITRO JSI VS. CLASSIC OBJC / JNI METADATA -->
+        @if (
+          nitro.benchmarkCategoryFilter() === 'all' ||
+          nitro.benchmarkCategoryFilter() === 'classic'
+        ) {
+          <StackLayout
+            class="p-3.5 mb-3 rounded-2xl bg-surface border-subtle"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <Label
+              text="CLASSIC INTEROP VS. NITRO JSI • END-TO-END PATHWAY COMPARISON"
+              class="text-emerald-400 text-xxs font-bold"
+            ></Label>
+            <Label
+              [text]="
+                nitro.isAndroid
+                  ? 'Compares C++20 JSI HostFunctions & ArrayBuffers against Classic Java JNI Metadata (java.lang.*, ByteBuffer, StringBuilder)'
+                  : 'Compares C++20 / Swift 6 JSI HostFunctions & ArrayBuffers against Classic Objective-C Metadata (objc_msgSend, NSMutableData, NSString)'
+              "
+              class="text-slate-300 text-xs font-semibold mt-0.5"
+              textWrap="true"
+            ></Label>
+          </StackLayout>
+
+          @for (card of nitro.benchmarkCards(); track card.id) {
+          <StackLayout
+            [nsRouterLink]="['/benchmark', card.id]"
+            class="p-4 mb-3.5 rounded-2xl bg-surface border-subtle"
+            iosOverflowSafeArea="false"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <GridLayout columns="auto, *, auto" class="mb-1.5">
+              <Label
+                col="0"
+                [text]="card.category"
+                class="pill-cyan text-xxs font-bold px-2.5 py-0.5 mr-2"
+                iosOverflowSafeArea="false"
+              ></Label>
+              <Label
+                col="1"
+                [text]="card.iterationsLabel"
+                class="text-slate-400 text-xs"
+                verticalAlignment="center"
+              ></Label>
+              <Label
+                col="2"
+                [text]="card.speedupHeadline"
+                class="pill-emerald text-xs font-extrabold px-2.5 py-0.5"
+                iosOverflowSafeArea="false"
+              ></Label>
+            </GridLayout>
+
+            <Label
+              [text]="card.title"
+              class="text-white text-base font-extrabold mb-0.5"
+              textWrap="true"
+            ></Label>
+            <Label
+              [text]="card.subtitle"
+              class="text-slate-400 text-xs mb-3"
+              textWrap="true"
+            ></Label>
+
+            <!-- PROPORTIONAL TELEMETRY LANES -->
+            @for (lane of card.lanes; track lane.label) {
+              <StackLayout class="mb-2.5" iosOverflowSafeAreaEnabled="false">
+                <GridLayout columns="*, auto, auto" class="mb-1">
+                  <Label
+                    col="0"
+                    [text]="lane.label"
+                    class="text-slate-200 text-xs font-semibold"
+                    textWrap="true"
+                  ></Label>
+                  <Label
+                    col="1"
+                    [text]="lane.durationMs + ' ms'"
+                    [class]="lane.accentClass + ' text-xs font-extrabold mr-2'"
+                  ></Label>
+                  <Label
+                    col="2"
+                    [text]="lane.opsPerSec"
+                    class="text-slate-400 text-2xs font-mono"
+                  ></Label>
+                </GridLayout>
+
+                <!-- BAR VISUALIZER -->
+                <GridLayout
+                  columns="*, auto"
+                  class="bg-surface-elevated rounded-full h-2.5 overflow-hidden"
+                  iosOverflowSafeArea="false"
+                >
+                  <StackLayout
+                    col="0"
+                    horizontalAlignment="left"
+                    [width]="lane.relativeWidthPercent + '%'"
+                    [backgroundColor]="lane.barColor"
+                    class="h-2.5 rounded-full"
+                    iosOverflowSafeArea="false"
+                  ></StackLayout>
+                </GridLayout>
+              </StackLayout>
+            }
+
+            <GridLayout columns="*, auto" class="mt-1 pt-2">
+              <Label
+                col="0"
+                [text]="card.verificationNote"
+                class="text-slate-500 text-xxs font-mono"
+                textWrap="true"
+              ></Label>
+              <Label
+                col="1"
+                text="Inspect →"
+                class="text-emerald-400 text-xs font-bold ml-2"
+              ></Label>
+            </GridLayout>
+          </StackLayout>
+          }
+        }
+      }
+
+      <!-- ================================================================ -->
+      <!-- TAB 3: ANGLE #2 — PURE SWIFT 6 INTEROP (ZERO @OBJC)              -->
+      <!-- ================================================================ -->
+      @if (nitro.activeTab() === 'swift6') {
+        <!-- NITROGEN .NITRO.TS SPEC & HYBRIDOBJECTREGISTRY CARD -->
+        <StackLayout
+          class="p-4 mb-4 rounded-2xl bg-surface border-emerald-glow"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <GridLayout columns="*, auto" class="mb-1">
+            <Label
+              col="0"
+              text="NITROGEN .NITRO.TS SPEC • C++20 SDK"
+              class="text-emerald-400 text-xxs font-bold"
+              verticalAlignment="center"
+            ></Label>
+            <Label
+              col="1"
+              [text]="nitro.nitrogenSpecTelemetry().operationsExecuted + ' ops'"
+              class="pill-emerald text-xs font-bold px-2.5 py-0.5"
+              iosOverflowSafeArea="false"
+            ></Label>
+          </GridLayout>
+
+          <Label
+            text="DeviceSecureEnclave.nitro.ts"
+            class="text-white text-lg font-extrabold mb-1"
+            textWrap="true"
+          ></Label>
+          <Label
+            text="Compiled with <NitroModules/HybridObject.hpp> and HybridObjectRegistry using Nitrogen's registerHybrids(this, [](Prototype& p) { ... }) C++20 DSL."
+            class="text-slate-400 text-xs mb-3"
+            textWrap="true"
+          ></Label>
+
+          <StackLayout
+            class="p-3 mb-2 rounded-xl bg-surface-elevated"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <Label
+              text="CRYPTOKIT.HKDF<SHA256> DERIVED KEY (256-BIT)"
+              class="text-emerald-400 text-xxs font-bold"
+              textWrap="true"
+            ></Label>
+            <Label
+              [text]="nitro.nitrogenSpecTelemetry().hkdfKeyHex"
+              class="text-slate-200 text-2xs font-mono mt-0.5"
+              textWrap="true"
+            ></Label>
+          </StackLayout>
+
+          <StackLayout
+            class="p-3 mb-2 rounded-xl bg-surface-elevated"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <Label
+              text="CRYPTOKIT.AES.GCM SEALED BOX (NONCE + TAG)"
+              class="text-cyan-400 text-xxs font-bold"
+              textWrap="true"
+            ></Label>
+            <Label
+              [text]="nitro.nitrogenSpecTelemetry().aesGcmSealedHex"
+              class="text-slate-200 text-2xs font-mono mt-0.5"
+              textWrap="true"
+            ></Label>
+          </StackLayout>
+
+          <GridLayout columns="*, *" class="mt-0.5" iosOverflowSafeAreaEnabled="false">
+            <StackLayout
+              col="0"
+              class="p-2.5 mr-1 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <Label
+                text="ZERO-COPY ENTROPY"
+                class="text-indigo-400 text-xxs font-bold"
+                textWrap="true"
+              ></Label>
+              <Label
+                [text]="nitro.nitrogenSpecTelemetry().entropyPreviewHex"
+                class="text-slate-300 text-2xs font-mono mt-0.5"
+                textWrap="true"
+              ></Label>
+            </StackLayout>
+            <StackLayout
+              col="1"
+              class="p-2.5 ml-1 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <Label
+                text="PROMISE<STRING> (2.5K)"
+                class="text-amber-400 text-xxs font-bold"
+                textWrap="true"
+              ></Label>
+              <Label
+                [text]="nitro.nitrogenSpecTelemetry().asyncRoundsKeyHex"
+                class="text-slate-300 text-2xs font-mono mt-0.5"
+                textWrap="true"
+              ></Label>
+            </StackLayout>
+          </GridLayout>
+        </StackLayout>
+
+        <!-- PURE SWIFT CRYPTOKIT CARD -->
+        <StackLayout
+          class="p-4 mb-4 rounded-2xl bg-surface border-cyan-glow"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <GridLayout columns="*, auto" class="mb-1">
+            <Label
+              col="0"
+              text="ANGLE #2 • PURE SWIFT 6 VALUE TYPES"
+              class="text-cyan-400 text-xxs font-bold"
+              verticalAlignment="center"
+            ></Label>
+            <Label
+              col="1"
+              [text]="nitro.swiftCryptoTelemetry().executionUs + ' µs'"
+              class="pill-cyan text-xs font-bold px-2.5 py-0.5"
+              iosOverflowSafeArea="false"
+            ></Label>
+          </GridLayout>
+
+          <Label
+            text="Apple CryptoKit (Zero-@objc Structs)"
+            class="text-white text-lg font-extrabold mb-1"
+            textWrap="true"
+          ></Label>
+          <Label
+            text="CryptoKit.SHA256, HMAC<SHA256>, and SymmetricKey are pure Swift generic value types invisible to Objective-C metadata. Nitro bridges them directly via C-ABI / C++20 pointers."
+            class="text-slate-400 text-xs mb-3"
+            textWrap="true"
+          ></Label>
+
+          <!-- PAYLOAD PRESET SELECTOR -->
+          <Label
+            text="SELECT PAYLOAD PRESET:"
+            class="text-slate-400 text-xxs font-bold mb-1.5"
+          ></Label>
+          <GridLayout columns="*, *, *" class="mb-3" iosOverflowSafeAreaEnabled="false">
+            <Button
+              col="0"
+              text="Preset #1"
+              iosOverflowSafeArea="false"
+              (tap)="selectCryptoPreset(0)"
+              [class]="
+                selectedCryptoPresetIdx() === 0
+                  ? 'btn-primary-cyan mr-1 py-2 text-xs'
+                  : 'btn-secondary-dark mr-1 py-2 text-xs'
+              "
+            ></Button>
+            <Button
+              col="1"
+              text="Preset #2"
+              iosOverflowSafeArea="false"
+              (tap)="selectCryptoPreset(1)"
+              [class]="
+                selectedCryptoPresetIdx() === 1
+                  ? 'btn-primary-cyan mx-1 py-2 text-xs'
+                  : 'btn-secondary-dark mx-1 py-2 text-xs'
+              "
+            ></Button>
+            <Button
+              col="2"
+              text="Preset #3"
+              iosOverflowSafeArea="false"
+              (tap)="selectCryptoPreset(2)"
+              [class]="
+                selectedCryptoPresetIdx() === 2
+                  ? 'btn-primary-cyan ml-1 py-2 text-xs'
+                  : 'btn-secondary-dark ml-1 py-2 text-xs'
+              "
+            ></Button>
+          </GridLayout>
+
+          <StackLayout
+            class="p-3 mb-2 rounded-xl bg-surface-elevated"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <Label
+              text="INPUT PAYLOAD"
+              class="text-slate-400 text-xxs font-bold"
+            ></Label>
+            <Label
+              [text]="nitro.swiftCryptoTelemetry().inputPayload"
+              class="text-white text-xs font-mono mt-0.5"
+              textWrap="true"
+            ></Label>
+          </StackLayout>
+
+          <StackLayout
+            class="p-3 mb-2 rounded-xl bg-surface-elevated"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <Label
+              text="CRYPTOKIT.SHA256 (UTF-8 JSI POINTER)"
+              class="text-cyan-400 text-xxs font-bold"
+            ></Label>
+            <Label
+              [text]="nitro.swiftCryptoTelemetry().sha256Digest"
+              class="text-slate-200 text-2xs font-mono mt-0.5"
+              textWrap="true"
+            ></Label>
+          </StackLayout>
+
+          <StackLayout
+            class="p-3 mb-2 rounded-xl bg-surface-elevated"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <Label
+              text="CRYPTOKIT.SHA256 (ZERO-COPY JSI ARRAYBUFFER)"
+              class="text-emerald-400 text-xxs font-bold"
+            ></Label>
+            <Label
+              [text]="nitro.swiftCryptoTelemetry().zeroCopyBufferDigest"
+              class="text-slate-200 text-2xs font-mono mt-0.5"
+              textWrap="true"
+            ></Label>
+          </StackLayout>
+
+          <StackLayout
+            class="p-3 rounded-xl bg-surface-elevated"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <Label
+              text="CRYPTOKIT.HMAC<SHA256> (SYMMETRIC KEY)"
+              class="text-indigo-400 text-xxs font-bold"
+            ></Label>
+            <Label
+              [text]="nitro.swiftCryptoTelemetry().hmacDigest"
+              class="text-slate-200 text-2xs font-mono mt-0.5"
+              textWrap="true"
+            ></Label>
+          </StackLayout>
+        </StackLayout>
+
+        <!-- SWIFT 6 STRUCTURED CONCURRENCY TASKGROUP + C++ GCD PROMISE -->
+        <StackLayout
+          class="p-4 mb-4 rounded-2xl bg-surface border-subtle"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <GridLayout columns="*, auto" class="mb-2">
+            <StackLayout col="0" class="mr-2">
+              <Label
+                text="SWIFT 6 CONCURRENCY ↔ JSI PROMISE"
+                class="text-cyan-400 text-xxs font-bold"
+              ></Label>
+              <Label
+                text="withTaskGroup → EventLoop"
+                class="text-white text-base font-extrabold mt-0.5"
+                textWrap="true"
+              ></Label>
+            </StackLayout>
+            <Button
+              col="1"
+              iosOverflowSafeArea="false"
+              [text]="nitro.isRunningAsync() ? 'Running...' : 'Spawn Tasks'"
+              (tap)="runAsyncSuite()"
+              class="btn-primary-cyan px-3 py-2 text-xs"
+              verticalAlignment="center"
+            ></Button>
+          </GridLayout>
+
+          <Label
+            text="Spawns 8 parallel child tasks on Swift's cooperative thread pool and resolves a JSI Promise back on the NativeScript V8 thread via tns::EventLoop::PostOrdered."
+            class="text-slate-400 text-xs mb-3"
+            textWrap="true"
+          ></Label>
+
+          @if (nitro.asyncTelemetry().swiftTaskResult; as swiftAsync) {
+            <StackLayout
+              class="p-3 mb-2.5 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <GridLayout columns="*, auto">
+                <Label
+                  col="0"
+                  text="Swift 6 Parallel TaskGroup (8 Tasks)"
+                  class="text-cyan-400 text-xs font-bold"
+                ></Label>
+                <Label
+                  col="1"
+                  [text]="swiftAsync.durationMs.toFixed(2) + ' ms'"
+                  class="text-white text-xs font-extrabold"
+                ></Label>
+              </GridLayout>
+              <Label
+                [text]="
+                  'Converged: ' +
+                  swiftAsync.result.toFixed(9) +
+                  ' (' +
+                  nitro.formatInt(swiftAsync.totalIterations) +
+                  ' terms)'
+                "
+                class="text-slate-300 text-2xs font-mono mt-1"
+                textWrap="true"
+              ></Label>
+              <Label
+                [text]="swiftAsync.concurrencyEngine"
+                class="text-slate-500 text-xxs font-mono mt-0.5"
+                textWrap="true"
+              ></Label>
+            </StackLayout>
+          }
+
+          @if (nitro.asyncTelemetry().cppPiResult; as cppAsync) {
+            <StackLayout
+              class="p-3 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <GridLayout columns="*, auto">
+                <Label
+                  col="0"
+                  text="C++20 Background GCD Worker"
+                  class="text-emerald-400 text-xs font-bold"
+                ></Label>
+                <Label
+                  col="1"
+                  [text]="cppAsync.durationMs.toFixed(2) + ' ms'"
+                  class="text-white text-xs font-extrabold"
+                ></Label>
+              </GridLayout>
+              <Label
+                [text]="
+                  'π Estimate: ' +
+                  cppAsync.pi.toFixed(9) +
+                  ' (' +
+                  nitro.formatInt(cppAsync.iterations) +
+                  ' terms)'
+                "
+                class="text-slate-300 text-2xs font-mono mt-1"
+                textWrap="true"
+              ></Label>
+              <Label
+                [text]="cppAsync.dispatcher"
+                class="text-slate-500 text-xxs font-mono mt-0.5"
+                textWrap="true"
+              ></Label>
+            </StackLayout>
+          }
+        </StackLayout>
+      }
+
+      <!-- ================================================================ -->
+      <!-- TAB 4: ANGLE #1 — ZERO-COPY DSP & JSI::NATIVESTATE LAB           -->
+      <!-- ================================================================ -->
+      @if (nitro.activeTab() === 'zerocopy') {
+        <!-- ZERO-COPY DSP & SIMD4 CARD -->
+        <StackLayout
+          class="p-4 mb-4 rounded-2xl bg-surface border-indigo-glow"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <GridLayout columns="*, auto" class="mb-1">
+            <Label
+              col="0"
+              text="ZERO-COPY V8 BACKINGSTORE PIPELINE"
+              class="text-indigo-400 text-xxs font-bold"
+              verticalAlignment="center"
+            ></Label>
+            <Label
+              col="1"
+              [text]="nitro.zeroCopyTelemetry().throughputGbPerSec + ' GB/s'"
+              class="pill-indigo text-xs font-extrabold px-2.5 py-0.5"
+              iosOverflowSafeArea="false"
+            ></Label>
+          </GridLayout>
+
+          <Label
+            [text]="
+              nitro.isAndroid
+                ? 'In-Place C++20 Biquad & Harmonic DSP'
+                : 'In-Place C++20 DSP & Swift SIMD4'
+            "
+            class="text-white text-lg font-extrabold mb-1"
+            textWrap="true"
+          ></Label>
+          <Label
+            text="Mutates a 65,536-sample Float32Array (256 KB) directly in V8's BackingStore via jsi::ArrayBuffer::data(rt) without copying a single byte."
+            class="text-slate-400 text-xs mb-3"
+            textWrap="true"
+          ></Label>
+
+          <!-- DRIVE PRESET BUTTONS -->
+          <Label
+            text="ANALOG SATURATION DRIVE (MUTATES V8 BUFFER IN-PLACE):"
+            class="text-slate-400 text-xxs font-bold mb-1.5"
+          ></Label>
+          <GridLayout columns="*, *, *, *" class="mb-3" iosOverflowSafeAreaEnabled="false">
+            <Button
+              col="0"
+              text="1.0x"
+              iosOverflowSafeArea="false"
+              (tap)="selectDspDrive(1.0)"
+              [class]="
+                selectedDrive() === 1.0
+                  ? 'btn-primary-emerald mr-1 py-2 text-xs'
+                  : 'btn-secondary-dark mr-1 py-2 text-xs'
+              "
+            ></Button>
+            <Button
+              col="1"
+              text="2.4x"
+              iosOverflowSafeArea="false"
+              (tap)="selectDspDrive(2.4)"
+              [class]="
+                selectedDrive() === 2.4
+                  ? 'btn-primary-emerald mx-1 py-2 text-xs'
+                  : 'btn-secondary-dark mx-1 py-2 text-xs'
+              "
+            ></Button>
+            <Button
+              col="2"
+              text="4.8x"
+              iosOverflowSafeArea="false"
+              (tap)="selectDspDrive(4.8)"
+              [class]="
+                selectedDrive() === 4.8
+                  ? 'btn-primary-emerald mx-1 py-2 text-xs'
+                  : 'btn-secondary-dark mx-1 py-2 text-xs'
+              "
+            ></Button>
+            <Button
+              col="3"
+              text="8.0x"
+              iosOverflowSafeArea="false"
+              (tap)="selectDspDrive(8.0)"
+              [class]="
+                selectedDrive() === 8.0
+                  ? 'btn-primary-emerald ml-1 py-2 text-xs'
+                  : 'btn-secondary-dark ml-1 py-2 text-xs'
+              "
+            ></Button>
+          </GridLayout>
+
+          <!-- LIVE WAVEFORM SPECTRUM BARS FROM MUTATED FLOAT32ARRAY -->
+          <StackLayout
+            class="p-3 mb-3 rounded-xl bg-surface-elevated"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <GridLayout columns="*, auto" class="mb-2">
+              <Label
+                col="0"
+                text="LIVE IN-PLACE BUFFER AMPLITUDE"
+                class="text-slate-400 text-xxs font-bold"
+              ></Label>
+              <Label
+                col="1"
+                [text]="
+                  'Ptr ' + nitro.zeroCopyTelemetry().backingStoreAddress
+                "
+                class="text-emerald-400 text-xxs font-mono font-bold"
+              ></Label>
+            </GridLayout>
+
+            <GridLayout
+              columns="*, *, *, *, *, *, *, *, *, *, *, *"
+              class="h-16 items-end"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              @for (
+                bar of nitro.zeroCopyTelemetry().waveformPreview;
+                track $index
+              ) {
+                <StackLayout
+                  [col]="$index"
+                  verticalAlignment="bottom"
+                  [height]="bar * 56"
+                  class="mx-0.5 rounded-t bg-emerald-400"
+                  iosOverflowSafeArea="false"
+                ></StackLayout>
+              }
+            </GridLayout>
+          </StackLayout>
+
+          <!-- TELEMETRY METRICS GRID -->
+          <GridLayout columns="*, *" rows="auto, auto" iosOverflowSafeAreaEnabled="false">
+            <StackLayout
+              row="0"
+              col="0"
+              class="p-2.5 mr-1 mb-2 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <Label
+                text="C++20 BIQUAD + CLIP"
+                class="text-slate-400 text-xxs font-bold"
+              ></Label>
+              <Label
+                [text]="nitro.zeroCopyTelemetry().dspDurationUs + ' µs'"
+                class="text-emerald-400 text-base font-extrabold"
+              ></Label>
+              <Label
+                [text]="
+                  'Peak ' +
+                  nitro.zeroCopyTelemetry().dspPeak.toFixed(2) +
+                  ' • RMS ' +
+                  nitro.zeroCopyTelemetry().dspRms.toFixed(2)
+                "
+                class="text-slate-400 text-xxs font-mono"
+              ></Label>
+            </StackLayout>
+
+            <StackLayout
+              row="0"
+              col="1"
+              class="p-2.5 ml-1 mb-2 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <Label
+                [text]="
+                  nitro.isAndroid ? 'ZERO-COPY THROUGHPUT' : 'SWIFT SIMD4 + vDSP'
+                "
+                class="text-slate-400 text-xxs font-bold"
+              ></Label>
+              <Label
+                [text]="
+                  nitro.isAndroid
+                    ? nitro.zeroCopyTelemetry().throughputGbPerSec + ' GB/s'
+                    : nitro.zeroCopyTelemetry().simdDurationUs + ' µs'
+                "
+                class="text-cyan-400 text-base font-extrabold"
+              ></Label>
+              <Label
+                [text]="
+                  nitro.isAndroid
+                    ? '64K Float32 In-Place'
+                    : '16K lanes • E=' +
+                      nitro.zeroCopyTelemetry().simdEnergy.toFixed(0)
+                "
+                class="text-slate-400 text-xxs font-mono"
+              ></Label>
+            </StackLayout>
+
+            <StackLayout
+              row="1"
+              col="0"
+              colSpan="2"
+              class="p-2.5 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <Label
+                text="C++-ALLOCATED jsi::MutableBuffer → JS Float32Array"
+                class="text-indigo-400 text-xxs font-bold"
+              ></Label>
+              <Label
+                [text]="
+                  'Sample[10] = ' +
+                  nitro.zeroCopyTelemetry().nativeMutableBufferSample0 +
+                  ' • Sample[25] = ' +
+                  nitro.zeroCopyTelemetry().nativeMutableBufferSample1
+                "
+                class="text-slate-200 text-xs font-mono mt-0.5"
+              ></Label>
+            </StackLayout>
+          </GridLayout>
+        </StackLayout>
+
+        <!-- JSI::NATIVESTATE & PROTOTYPE ENGINE INSPECTOR -->
+        <StackLayout
+          class="p-4 rounded-2xl bg-surface border-subtle"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <GridLayout columns="*, auto" class="mb-2">
+            <StackLayout col="0" class="mr-2">
+              <Label
+                text="PROTOTYPE + JSI::NATIVESTATE ENGINE"
+                class="text-indigo-400 text-xxs font-bold"
+              ></Label>
+              <Label
+                text="V8 InternalField #2 + GC"
+                class="text-white text-base font-extrabold mt-0.5"
+                textWrap="true"
+              ></Label>
+            </StackLayout>
+            <Button
+              col="1"
+              iosOverflowSafeArea="false"
+              text="+500 Burst"
+              (tap)="runNativeStateBurst()"
+              class="btn-primary-emerald px-3 py-2 text-xs"
+              verticalAlignment="center"
+            ></Button>
+          </GridLayout>
+
+          <Label
+            text="Validates Nitro's modern Prototype + jsi::NativeState pattern on NativeScript's rnv8::V8Runtime, including deterministic .dispose() and V8 external memory accounting."
+            class="text-slate-400 text-xs mb-3"
+            textWrap="true"
+          ></Label>
+
+          @if (nitro.nativeStateSummary(); as state) {
+            <StackLayout
+              class="p-3 rounded-xl bg-surface-elevated"
+              iosOverflowSafeAreaEnabled="false"
+            >
+              <GridLayout columns="*, auto" class="py-1">
+                <Label
+                  col="0"
+                  text="Primary Instance Tag"
+                  class="text-slate-400 text-xs"
+                ></Label>
+                <Label
+                  col="1"
+                  [text]="state.tag + ' (#' + state.instanceId + ')'"
+                  class="text-white text-xs font-mono font-bold"
+                ></Label>
+              </GridLayout>
+              <GridLayout columns="*, auto" class="py-1">
+                <Label
+                  col="0"
+                  text="NativeState Call Count"
+                  class="text-slate-400 text-xs"
+                ></Label>
+                <Label
+                  col="1"
+                  [text]="nitro.formatInt(state.callCount)"
+                  class="text-emerald-400 text-xs font-mono font-bold"
+                ></Label>
+              </GridLayout>
+              <GridLayout columns="*, auto" class="py-1">
+                <Label
+                  col="0"
+                  text="Disposed HybridObjects / NativeStates"
+                  class="text-slate-400 text-xs"
+                ></Label>
+                <Label
+                  col="1"
+                  [text]="
+                    nitro.diagnostics().disposedHybridObjects +
+                    ' / ' +
+                    nitro.diagnostics().disposedNativeStates
+                  "
+                  class="text-cyan-400 text-xs font-mono font-bold"
+                ></Label>
+              </GridLayout>
+              <GridLayout columns="*, auto" class="py-1">
+                <Label
+                  col="0"
+                  text="Active Native Memory Tracked"
+                  class="text-slate-400 text-xs"
+                ></Label>
+                <Label
+                  col="1"
+                  [text]="
+                    nitro.formatInt(nitro.diagnostics().totalNativeBytesAllocated) + ' bytes'
+                  "
+                  class="text-indigo-400 text-xs font-mono font-bold"
+                ></Label>
+              </GridLayout>
+            </StackLayout>
+          }
+        </StackLayout>
+      }
+    </StackLayout>
+  </ScrollView>
+  </GridLayout>
+
+  <!-- HINGE GUTTER (RESERVED DIVISION REGION ON IPHONE DUO) -->
+  @if (panes()) {
+    <StackLayout col="1" class="bg-obsidian" iosOverflowSafeAreaEnabled="false"></StackLayout>
+
+    <!-- RIGHT PANE (UNFOLDED WIDE-OPEN IPHONE DUO): WEBGPU QUATTRO S1 STAGE -->
+    <GridLayout
+      col="2"
+      rows="auto, *, auto"
+      class="bg-obsidian pr-4 pl-2 pt-2 pb-6"
+      iosOverflowSafeAreaEnabled="false"
+    >
+      <!-- RIGHT PANE TELEMETRY RIBBON -->
+      <GridLayout
+        row="0"
+        columns="auto, *, auto"
+        class="pb-3"
+        iosOverflowSafeAreaEnabled="false"
+      >
+        <StackLayout col="0" orientation="horizontal" verticalAlignment="center">
+          <Label
+            text="●"
+            class="text-amber-400 text-xs mr-1.5"
+            verticalAlignment="center"
+            iosOverflowSafeArea="false"
+          ></Label>
+          <Label
+            [text]="
+              nitro.isAndroid
+                ? 'FOLD RIGHT PANE • WEBGPU RALLY STAGE'
+                : 'DUO RIGHT PANE • WEBGPU RALLY STAGE'
+            "
+            class="text-amber-400 text-xs font-bold"
+            verticalAlignment="center"
+          ></Label>
+        </StackLayout>
+
+        <Label
+          col="1"
+          [text]="'FLYBY: ' + nitro.lastFlybyLabel()"
+          class="text-slate-400 text-xs text-center font-mono"
+          verticalAlignment="center"
+        ></Label>
+
+        <Label
+          col="2"
+          [text]="'LAUNCHES #' + nitro.flybyTriggerCount()"
+          class="pill-cyan text-xs font-bold px-2.5 py-0.5"
+          verticalAlignment="center"
+          iosOverflowSafeArea="false"
+        ></Label>
+      </GridLayout>
+
+      <!-- FULL-HEIGHT WEBGPU + 2D CANVAS GROUP B QUATTRO S1 STAGE -->
+      <ns-rally-stage
+        row="1"
+        [compact]="false"
+        iosOverflowSafeAreaEnabled="false"
+      ></ns-rally-stage>
+
+      <!-- QUICK BENCHMARK & TURBO TRIGGER STRIP ON RIGHT SCREEN -->
+      <GridLayout
+        row="2"
+        columns="*, *, *, *"
+        class="mt-3 p-2 rounded-2xl bg-surface border-subtle"
+        iosOverflowSafeAreaEnabled="false"
+      >
+        <Button
+          col="0"
+          text="Full Bench"
+          (tap)="runFullBenchmarks()"
+          iosOverflowSafeArea="false"
+          class="bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl py-2.5 mr-1"
+        ></Button>
+        <Button
+          col="1"
+          [text]="nitro.isAndroid ? '+500 State' : 'Swift 6 Crypto'"
+          (tap)="nitro.isAndroid ? runNativeStateBurst() : executeSwift6EnclaveOps()"
+          iosOverflowSafeArea="false"
+          class="bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl py-2.5 mx-1"
+        ></Button>
+        <Button
+          col="2"
+          text="0-Copy DSP"
+          (tap)="stepAudioFrame()"
+          iosOverflowSafeArea="false"
+          class="bg-indigo-500 text-white font-bold text-xs rounded-xl py-2.5 mx-1"
+        ></Button>
+        <Button
+          col="3"
+          text="Turbo Flyby"
+          (tap)="nitro.triggerRallyFlyby('MANUAL GROUP B LAUNCH • 2.4 BAR')"
+          iosOverflowSafeArea="false"
+          class="bg-amber-500 text-slate-950 font-bold text-xs rounded-xl py-2.5 ml-1"
+        ></Button>
+      </GridLayout>
+    </GridLayout>
+  }
+</GridLayout>
+

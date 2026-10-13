@@ -1,3 +1,96 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+Page {
+  background-color: #060911;
+  color: #f8fafc;
+}
+
+ActionBar {
+  background-color: #060911;
+  color: #f8fafc;
+}
+
+.bg-obsidian {
+  background-color: #060911;
+}
+
+.bg-surface {
+  background-color: #0d1322;
+}
+
+.bg-surface-elevated {
+  background-color: #131c31;
+}
+
+.bg-surface-highlight {
+  background-color: #192540;
+}
+
+.border-subtle {
+  border-color: #1e293b;
+  border-width: 1;
+}
+
+.border-emerald-glow {
+  border-color: #059669;
+  border-width: 1;
+}
+
+.border-cyan-glow {
+  border-color: #0891b2;
+  border-width: 1;
+}
+
+.border-indigo-glow {
+  border-color: #4f46e5;
+  border-width: 1;
+}
+
+.pill-emerald {
+  background-color: #064e3b;
+  color: #34d399;
+  border-radius: 999;
+}
+
+.pill-cyan {
+  background-color: #083344;
+  color: #22d3ee;
+  border-radius: 999;
+}
+
+.pill-indigo {
+  background-color: #1e1b4b;
+  color: #818cf8;
+  border-radius: 999;
+}
+
+.pill-amber {
+  background-color: #451a03;
+  color: #fbbf24;
+  border-radius: 999;
+}
+
+.btn-primary-emerald {
+  background-color: #10b981;
+  color: #022c22;
+  border-radius: 12;
+  font-weight: 700;
+}
+
+.btn-primary-cyan {
+  background-color: #06b6d4;
+  color: #083344;
+  border-radius: 12;
+  font-weight: 700;
+}
+
+.btn-secondary-dark {
+  background-color: #172036;
+  color: #e2e8f0;
+  border-color: #283552;
+  border-width: 1;
+  border-radius: 12;
+  font-weight: 600;
+}

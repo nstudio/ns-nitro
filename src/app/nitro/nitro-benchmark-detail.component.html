@@ -1,0 +1,235 @@
+<ActionBar
+  [title]="card()?.category || 'BENCHMARK INSPECTOR'"
+  flat="true"
+  class="bg-obsidian text-white"
+>
+  <NavigationButton text="Back"></NavigationButton>
+  <ActionItem ios.position="right" text="Re-Run" (tap)="rerun()"></ActionItem>
+</ActionBar>
+
+<ScrollView class="bg-obsidian">
+  @if (card(); as item) {
+    <StackLayout class="p-4 pb-12" iosOverflowSafeAreaEnabled="false">
+      <!-- HEADER SUMMARY CARD -->
+      <StackLayout
+        class="p-4 mb-4 rounded-2xl bg-surface border-emerald-glow"
+        iosOverflowSafeAreaEnabled="false"
+      >
+        <GridLayout columns="auto, *, auto" class="mb-2">
+          <Label
+            col="0"
+            [text]="item.category"
+            class="pill-cyan text-xxs font-bold px-2.5 py-0.5 mr-2"
+            iosOverflowSafeArea="false"
+          ></Label>
+          <Label
+            col="1"
+            [text]="item.iterationsLabel"
+            class="text-slate-400 text-xs"
+            verticalAlignment="center"
+          ></Label>
+          <Label
+            col="2"
+            [text]="item.speedupHeadline"
+            class="pill-emerald text-xs font-extrabold px-2.5 py-0.5"
+            iosOverflowSafeArea="false"
+          ></Label>
+        </GridLayout>
+
+        <Label
+          [text]="item.title"
+          class="text-white text-xl font-extrabold mb-1"
+          textWrap="true"
+        ></Label>
+        <Label
+          [text]="item.subtitle"
+          class="text-slate-400 text-xs mb-3"
+          textWrap="true"
+        ></Label>
+
+        <StackLayout
+          class="p-3 rounded-xl bg-surface-elevated"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <Label
+            text="EMPIRICAL DELTA"
+            class="text-emerald-400 text-xxs font-bold"
+          ></Label>
+          <Label
+            [text]="item.speedupDetail"
+            class="text-white text-xs font-mono font-bold mt-0.5"
+            textWrap="true"
+          ></Label>
+          <Label
+            [text]="item.verificationNote"
+            class="text-slate-400 text-xxs font-mono mt-1"
+            textWrap="true"
+          ></Label>
+        </StackLayout>
+      </StackLayout>
+
+      <!-- DETAILED LANE BREAKDOWN -->
+      <StackLayout
+        class="p-4 mb-4 rounded-2xl bg-surface border-subtle"
+        iosOverflowSafeAreaEnabled="false"
+      >
+        <Label
+          text="PATHWAY TELEMETRY BREAKDOWN"
+          class="text-slate-200 text-xs font-bold mb-3"
+        ></Label>
+
+        @for (lane of item.lanes; track lane.label) {
+          <StackLayout
+            class="p-3 mb-2.5 rounded-xl bg-surface-elevated"
+            iosOverflowSafeAreaEnabled="false"
+          >
+            <GridLayout columns="*, auto" class="mb-1">
+              <Label
+                col="0"
+                [text]="lane.label"
+                class="text-white text-xs font-bold"
+                textWrap="true"
+              ></Label>
+              <Label
+                col="1"
+                [text]="lane.badgeText"
+                class="pill-cyan text-xxs font-bold px-2 py-0.5 ml-2"
+                iosOverflowSafeArea="false"
+              ></Label>
+            </GridLayout>
+
+            <GridLayout columns="*, *, *" class="my-1.5">
+              <StackLayout col="0">
+                <Label
+                  text="TOTAL TIME"
+                  class="text-slate-500 text-xxs font-bold"
+                ></Label>
+                <Label
+                  [text]="lane.durationMs + ' ms'"
+                  [class]="lane.accentClass + ' text-sm font-extrabold'"
+                ></Label>
+              </StackLayout>
+
+              <StackLayout col="1">
+                <Label
+                  text="THROUGHPUT"
+                  class="text-slate-500 text-xxs font-bold"
+                ></Label>
+                <Label
+                  [text]="lane.opsPerSec"
+                  class="text-slate-200 text-xs font-mono font-bold"
+                ></Label>
+              </StackLayout>
+
+              <StackLayout col="2">
+                <Label
+                  text="LATENCY / CALL"
+                  class="text-slate-500 text-xxs font-bold"
+                ></Label>
+                <Label
+                  [text]="lane.nsPerCall"
+                  class="text-slate-300 text-xs font-mono"
+                ></Label>
+              </StackLayout>
+            </GridLayout>
+
+            <GridLayout
+              columns="*, auto"
+              class="bg-obsidian rounded-full h-2.5 overflow-hidden mt-1"
+              iosOverflowSafeArea="false"
+            >
+              <StackLayout
+                col="0"
+                horizontalAlignment="left"
+                [width]="lane.relativeWidthPercent + '%'"
+                [backgroundColor]="lane.barColor"
+                class="h-2.5 rounded-full"
+                iosOverflowSafeArea="false"
+              ></StackLayout>
+            </GridLayout>
+          </StackLayout>
+        }
+      </StackLayout>
+
+      <!-- ARCHITECTURAL DEEP DIVE -->
+      <StackLayout
+        class="p-4 mb-4 rounded-2xl bg-surface border-subtle"
+        iosOverflowSafeAreaEnabled="false"
+      >
+        <Label
+          text="UNDER THE HOOD • RUNTIME MECHANICS"
+          class="text-cyan-400 text-xxs font-bold mb-1"
+        ></Label>
+        <Label
+          [text]="architectureNotes().pathwayHeader"
+          class="text-white text-base font-extrabold mb-3"
+          textWrap="true"
+        ></Label>
+
+        <StackLayout
+          class="p-3 mb-2.5 rounded-xl bg-surface-elevated"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <Label
+            [text]="
+              nitro.isAndroid
+                ? 'C++20 / JSI LAYER (JSIInstaller.cpp)'
+                : 'C++20 / JSI LAYER (NSNitroBridge.mm)'
+            "
+            class="text-emerald-400 text-xxs font-bold"
+          ></Label>
+          <Label
+            [text]="architectureNotes().cppSnippet"
+            class="text-slate-300 text-xs mt-1"
+            textWrap="true"
+          ></Label>
+        </StackLayout>
+
+        <StackLayout
+          class="p-3 mb-2.5 rounded-xl bg-surface-elevated"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <Label
+            [text]="
+              nitro.isAndroid
+                ? 'ANDROID NDK / JNI COMPARISON'
+                : 'PURE SWIFT 6 LAYER (NSNitroSwiftEngine.swift)'
+            "
+            class="text-cyan-400 text-xxs font-bold"
+          ></Label>
+          <Label
+            [text]="architectureNotes().swiftSnippet"
+            class="text-slate-300 text-xs mt-1"
+            textWrap="true"
+          ></Label>
+        </StackLayout>
+
+        <StackLayout
+          class="p-3 rounded-xl bg-surface-elevated"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <Label
+            text="STRATEGIC TAKEAWAY"
+            class="text-indigo-400 text-xxs font-bold"
+          ></Label>
+          <Label
+            [text]="architectureNotes().takeaway"
+            class="text-white text-xs font-semibold mt-1"
+            textWrap="true"
+          ></Label>
+        </StackLayout>
+      </StackLayout>
+
+      <Button
+        iosOverflowSafeArea="false"
+        [text]="
+          nitro.isRunningBenchmarks()
+            ? 'Running 100k Benchmark Suite...'
+            : '⚡ Re-Run Intensive Benchmark Suite'
+        "
+        (tap)="rerun()"
+        class="btn-primary-emerald py-3.5 text-xs"
+      ></Button>
+    </StackLayout>
+  }
+</ScrollView>

@@ -1,0 +1,22 @@
+@if (duo.supported()) {
+  <GridLayout
+    rows="auto"
+    columns="auto"
+    horizontalAlignment="center"
+    verticalAlignment="bottom"
+    isUserInteractionEnabled="false"
+    androidOverflowEdge="all-but-bottom"
+    class="hud"
+    (loaded)="onLoaded($any($event))"
+  >
+    <Glass glassRadius="24"></Glass>
+    <GridLayout rows="auto, auto" columns="auto, *, auto" class="hud-content" [width]="trackWidth + 36">
+      <Image [src]="icon()" tintColor="#6366f1" class="hud-icon"></Image>
+      <Label col="1" [text]="duo.poseLabel()" class="hud-title"></Label>
+      <Label col="2" [text]="duo.hingeDegrees() + '°'" class="hud-angle"></Label>
+      <GridLayout row="1" colSpan="3" class="hud-track" [width]="trackWidth" horizontalAlignment="left">
+        <GridLayout class="hud-fill" horizontalAlignment="left" [width]="fillWidth()"></GridLayout>
+      </GridLayout>
+    </GridLayout>
+  </GridLayout>
+}

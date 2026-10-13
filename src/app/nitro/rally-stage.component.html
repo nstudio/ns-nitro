@@ -1,0 +1,133 @@
+<GridLayout
+  rows="auto, *, auto"
+  [class]="
+    compact
+      ? 'rounded-2xl bg-surface border-emerald-glow overflow-hidden mb-4'
+      : 'rounded-3xl bg-surface border-emerald-glow overflow-hidden'
+  "
+  [height]="compact ? 250 : 'auto'"
+  iosOverflowSafeAreaEnabled="false"
+  (loaded)="onStageLoaded($any($event))"
+  (unloaded)="onStageUnloaded()"
+  (layoutChanged)="onStageLayout($any($event))"
+  (tap)="launchManualFlyby()"
+>
+  <!-- LAYER 0: WEBGPU SYNTHWAVE SUNSET + PARTICLE SHADER SURFACE -->
+  <Canvas
+    rowSpan="3"
+    isUserInteractionEnabled="false"
+    (ready)="onGpuCanvasReady($any($event))"
+  ></Canvas>
+
+  <!-- LAYER 1: 2D CANVAS GROUP B QUATTRO S1 + ROADSIDE BANNER OVERLAY -->
+  <Canvas
+    rowSpan="3"
+    isUserInteractionEnabled="false"
+    (ready)="onOverlayCanvasReady($any($event))"
+  ></Canvas>
+
+  <!-- LAYER 2: TOP TELEMETRY HUD OVERLAY -->
+  <GridLayout
+    row="0"
+    columns="auto, *, auto"
+    class="px-3.5 pt-3 pb-2"
+    iosOverflowSafeAreaEnabled="false"
+  >
+    <StackLayout
+      col="0"
+      orientation="horizontal"
+      class="px-2.5 py-1 rounded-full"
+      style="background-color: rgba(12, 5, 24, 0.76); border-width: 1; border-color: rgba(255, 92, 168, 0.45);"
+      iosOverflowSafeAreaEnabled="false"
+    >
+      <Label
+        text="●"
+        [class]="isFlyingBy() ? 'text-amber-400 text-xs mr-1.5' : 'text-emerald-400 text-xs mr-1.5'"
+        verticalAlignment="center"
+        iosOverflowSafeArea="false"
+      ></Label>
+      <Label
+        [text]="isFlyingBy() ? 'QUATTRO TURBO FLYBY' : 'WEBGPU // GROUP B S1'"
+        class="text-white text-xxs font-extrabold"
+        verticalAlignment="center"
+        iosOverflowSafeArea="false"
+      ></Label>
+    </StackLayout>
+
+    <Label
+      col="1"
+      [text]="duoBadgeText()"
+      class="text-white text-xxs font-mono font-bold text-center mx-1"
+      verticalAlignment="center"
+      iosOverflowSafeArea="false"
+    ></Label>
+
+    <Label
+      col="2"
+      [text]="audioMuted() ? 'AUDIO OFF' : '5-CYL ON'"
+      (tap)="toggleAudio($event)"
+      class="px-2.5 py-1 rounded-full text-xxs font-extrabold text-amber-300"
+      style="background-color: rgba(12, 5, 24, 0.78); border-width: 1; border-color: rgba(251, 191, 36, 0.45);"
+      verticalAlignment="center"
+      iosOverflowSafeArea="false"
+    ></Label>
+  </GridLayout>
+
+  <!-- LAYER 3: BOTTOM TACHOMETER & INTERACTIVE FLYBY CONTROLS -->
+  <StackLayout
+    row="2"
+    class="px-3.5 pb-3 pt-2"
+    style="background: linear-gradient(to top, rgba(9, 2, 18, 0.90), rgba(9, 2, 18, 0.0));"
+    iosOverflowSafeAreaEnabled="false"
+  >
+    <GridLayout columns="*, auto" class="mb-1.5" iosOverflowSafeAreaEnabled="false">
+      <StackLayout col="0" iosOverflowSafeAreaEnabled="false">
+        <Label
+          [text]="nitro.lastFlybyLabel()"
+          class="text-amber-300 text-xxs font-bold"
+          iosOverflowSafeArea="false"
+        ></Label>
+        <Label
+          [text]="rpmTelemetryText()"
+          class="text-white text-xs font-mono font-extrabold"
+          iosOverflowSafeArea="false"
+        ></Label>
+      </StackLayout>
+
+      <StackLayout
+        col="1"
+        orientation="horizontal"
+        verticalAlignment="bottom"
+        iosOverflowSafeAreaEnabled="false"
+      >
+        <Label
+          [text]="nitro.averageSpeedup() + ' JSI'"
+          class="px-2.5 py-1 mr-1.5 rounded-lg text-xxs font-extrabold text-slate-950 bg-amber-400"
+          iosOverflowSafeArea="false"
+        ></Label>
+        <Label
+          text="FLYBY + BENCH"
+          (tap)="triggerBenchAndFlyby($event)"
+          class="px-2.5 py-1 rounded-lg text-xxs font-extrabold text-white bg-rose-600"
+          iosOverflowSafeArea="false"
+        ></Label>
+      </StackLayout>
+    </GridLayout>
+
+    <!-- RPM / BOOST BAR -->
+    <GridLayout
+      columns="*"
+      class="h-1.5 rounded-full overflow-hidden"
+      style="background-color: rgba(255, 255, 255, 0.14);"
+      iosOverflowSafeAreaEnabled="false"
+    >
+      <StackLayout
+        horizontalAlignment="left"
+        [width]="rpmBarPercent() + '%'"
+        class="h-1.5 rounded-full"
+        style="background: linear-gradient(to right, #10b981, #f59e0b, #f43f5e);"
+        iosOverflowSafeAreaEnabled="false"
+      ></StackLayout>
+    </GridLayout>
+  </StackLayout>
+</GridLayout>

@@ -1,0 +1,4 @@
+module NSNitroBridge {
+    header "NSNitroBridge.h"
+    export *
+}
