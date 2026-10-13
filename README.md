@@ -1,5 +1,7 @@
 A NativeScript (Angular + Vite) app that runs [NitroModules](https://nitro.margelo.com) **directly inside NativeScript's V8 isolate**, with no React Native dependency.
 
+https://github.com/user-attachments/assets/f3b2a535-d2f9-406d-9b3f-2e6998e42388
+
 ## How it works
 
 NativeScript's iOS and Android runtimes already ship a `facebook::jsi::Runtime` implementation (`rnv8::V8Runtime`) layered over V8. Nitro's `HybridObject` / `HybridObjectRegistry` / `HybridObjectPrototype` are built against that runtime, so Nitro modules bind straight into the same JS context as regular NativeScript code.
