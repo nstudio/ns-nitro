@@ -27,3 +27,7 @@ typings/
 !.vscode/launch.json
 !.vscode/extensions.json
 .ns-vite-build
+
+# SwiftPM (Package.swift at the app root)
+.build/
+.swiftpm/
