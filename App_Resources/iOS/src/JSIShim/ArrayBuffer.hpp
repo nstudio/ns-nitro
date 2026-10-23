@@ -10,7 +10,7 @@
 #include "runtime/Runtime.h"
 #include "v8.h"
 
-namespace margelo::nitro {
+namespace nsjsi {
 
 class NativeMutableBuffer final : public facebook::jsi::MutableBuffer {
  public:
@@ -148,4 +148,4 @@ class ArrayBuffer final {
   bool isOwner_;
 };
 
-}  // namespace margelo::nitro
+}  // namespace nsjsi

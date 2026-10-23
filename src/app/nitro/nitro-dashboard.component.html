@@ -223,6 +223,69 @@
           </GridLayout>
         </StackLayout>
 
+        <!-- NITRO MODULES V1 (nitro-core) SHOWCASE -->
+        <StackLayout
+          class="p-4 mb-4 rounded-2xl bg-surface border-cyan-glow"
+          iosOverflowSafeAreaEnabled="false"
+        >
+          <GridLayout columns="*, auto" class="mb-1.5">
+            <Label
+              col="0"
+              text="NITRO MODULES V1 // NITRO-CORE"
+              class="text-cyan-400 text-xs font-bold"
+              verticalAlignment="center"
+            ></Label>
+            <Label
+              col="1"
+              [text]="'v' + nitro.nitroV1().version.split('.nightly')[0] + ' ' + nitro.nitroV1().buildType"
+              class="pill-emerald text-xxs font-bold px-2.5 py-0.5"
+              iosOverflowSafeArea="false"
+            ></Label>
+          </GridLayout>
+          <Label
+            text="new QuattroEngine(44100)"
+            class="text-white text-xl font-extrabold mb-1"
+            textWrap="true"
+          ></Label>
+          <Label
+            [text]="
+              'Nitrogen-generated Hybrid Objects (C++ & ' +
+              (nitro.isAndroid ? 'Kotlin' : 'Swift') +
+              ') running on nitro-core inside NativeScript\'s V8 isolate. The flyby audio is synthesized by this C++ class straight into ' +
+              (nitro.isAndroid ? 'the AudioTrack\'s direct ByteBuffer.' : 'AVAudioPCMBuffer memory.')
+            "
+            class="text-slate-400 text-xs mb-3"
+            textWrap="true"
+          ></Label>
+
+          @for (row of [
+            { k: 'QuattroEngine.firingOrder', v: nitro.nitroV1().firingOrder || '…' },
+            { k: 'engine instanceof QuattroEngine', v: nitro.nitroV1().isInstance ? 'true' : 'false' },
+            { k: 'NitroModules.isHybridObject(engine)', v: nitro.nitroV1().isHybridObject ? 'true' : 'false' },
+            { k: 'engine.telemetryAt(1.1)', v: nitro.nitroV1().telemetry || '…' },
+            {
+              k: 'await engine.synthesizeFlyby(seed)',
+              v: nitro.nitroV1().running
+                ? 'synthesizing on Nitro ThreadPool…'
+                : nitro.nitroV1().synthKilobytes + ' KB in ' + nitro.nitroV1().synthTotalMs.toFixed(1) + ' ms'
+            },
+            { k: 'JS thread blocked by that call', v: nitro.nitroV1().jsBlockedMs.toFixed(3) + ' ms' },
+            { k: 'NitroModules.getAllHybridClassNames()', v: nitro.nitroV1().classNames.join(', ') }
+          ]; track row.k) {
+            <StackLayout class="py-1" iosOverflowSafeAreaEnabled="false">
+              <Label [text]="row.k" class="text-slate-400 text-xxs font-mono" textWrap="true"></Label>
+              <Label [text]="row.v" class="text-emerald-400 text-xxs font-bold font-mono" textWrap="true"></Label>
+            </StackLayout>
+          }
+
+          <Button
+            [text]="nitro.nitroV1().running ? 'SYNTHESIZING…' : 'SYNTHESIZE ON NATIVE THREAD'"
+            class="mt-3 py-2.5 rounded-xl bg-surface-elevated text-cyan-400 text-xs font-bold"
+            [isEnabled]="!nitro.nitroV1().running"
+            (tap)="nitro.runNitroV1Showcase()"
+          ></Button>
+        </StackLayout>
+
         <!-- LIVE RUNTIME DIAGNOSTICS MATRIX -->
         <StackLayout
           class="p-4 mb-4 rounded-2xl bg-surface border-subtle"
@@ -758,12 +821,12 @@
           </GridLayout>
 
           <Label
-            text="DeviceSecureEnclave.nitro.ts"
+            text="DeviceSecureEnclave.shim.ts"
             class="text-white text-lg font-extrabold mb-1"
             textWrap="true"
           ></Label>
           <Label
-            text="Compiled with <NitroModules/HybridObject.hpp> and HybridObjectRegistry using Nitrogen's registerHybrids(this, [](Prototype& p) { ... }) C++20 DSL."
+            text="A hand-written JSI HostObject (App_Resources/iOS/src/JSIShim) modeled on Nitro's API, kept as a baseline next to the real Nitro v1 Hybrid Objects on the Deck tab."
             class="text-slate-400 text-xs mb-3"
             textWrap="true"
           ></Label>

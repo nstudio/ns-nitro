@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "classes": {
+    "CxxBench": {
+      "android": {
+        "implementation": {
+          "className": "HybridCxxBench",
+          "include": "\"HybridCxxBench.hpp\""
+        },
+        "language": "c++"
+      },
+      "ios": {
+        "implementation": {
+          "className": "HybridCxxBench",
+          "include": "\"HybridCxxBench.hpp\""
+        },
+        "language": "c++"
+      }
+    },
+    "PlatformBench": {
+      "android": {
+        "implementation": {
+          "className": "HybridPlatformBench"
+        },
+        "language": "kotlin"
+      },
+      "ios": {
+        "implementation": {
+          "className": "HybridPlatformBench"
+        },
+        "language": "swift"
+      }
+    },
+    "QuattroEngine": {
+      "android": {
+        "implementation": {
+          "className": "HybridQuattroEngine",
+          "include": "\"HybridQuattroEngine.hpp\""
+        },
+        "language": "c++"
+      },
+      "ios": {
+        "implementation": {
+          "className": "HybridQuattroEngine",
+          "include": "\"HybridQuattroEngine.hpp\""
+        },
+        "language": "c++"
+      }
+    }
+  }
+}

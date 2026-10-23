@@ -28,6 +28,10 @@ FOUNDATION_EXPORT double nitro_swift_simd_nbody_step(float * _Nullable bufferPtr
 
 @interface NSNitroBridge : NSObject
 
+/// Installs Nitro Modules v1 (nitro-core) and this app's Hybrid Objects into the
+/// calling thread's JS runtime. Must run before anything imports nitro-core.
++ (BOOL)installNitro;
+
 /// Installs the NitroModules JSI Host & HybridObject Registry onto the active
 /// NativeScript V8 Isolate via +[JSIRuntime runtime].
 + (BOOL)install;

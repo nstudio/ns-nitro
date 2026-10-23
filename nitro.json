@@ -1,0 +1,13 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "environment": "bare",
+  "cxxNamespace": ["nsnitro"],
+  "ios": {
+    "iosModuleName": "NSNitroModules"
+  },
+  "android": {
+    "androidNamespace": ["nsnitro"],
+    "androidCxxLibName": "nsnitromodules"
+  },
+  "ignorePaths": ["**/node_modules", "platforms", "App_Resources", "hooks", ".ns-vite-build"]
+}

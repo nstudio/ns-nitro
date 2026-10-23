@@ -8,10 +8,10 @@
 #include <utility>
 #include <vector>
 
-#include <NitroModules/JSIConverter.hpp>
+#include <JSIShim/JSIConverter.hpp>
 #include "jsi/jsi.h"
 
-namespace margelo::nitro {
+namespace nsjsi {
 
 class HybridObject;
 
@@ -195,4 +195,4 @@ class Prototype final {
   std::unordered_map<std::string, SetterInvoker> setters_;
 };
 
-}  // namespace margelo::nitro
+}  // namespace nsjsi

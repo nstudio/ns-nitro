@@ -3,13 +3,13 @@
 #include <memory>
 #include <string>
 
-#include <NitroModules/ArrayBuffer.hpp>
-#include <NitroModules/HybridObject.hpp>
-#include <NitroModules/Promise.hpp>
+#include <JSIShim/ArrayBuffer.hpp>
+#include <JSIShim/HybridObject.hpp>
+#include <JSIShim/Promise.hpp>
 
-namespace margelo::nitro::nsnitro {
+namespace nsjsi::nsnitro {
 
-class HybridDeviceSecureEnclaveSpec : public virtual margelo::nitro::HybridObject {
+class HybridDeviceSecureEnclaveSpec : public virtual nsjsi::HybridObject {
  public:
   static constexpr auto TAG = "DeviceSecureEnclave";
 
@@ -27,9 +27,9 @@ class HybridDeviceSecureEnclaveSpec : public virtual margelo::nitro::HybridObjec
                                        const std::string& info) = 0;
   virtual std::string sealAesGcmPayload(const std::string& plaintext,
                                         const std::string& secret) = 0;
-  virtual std::shared_ptr<margelo::nitro::ArrayBuffer> generateEntropyBuffer(
+  virtual std::shared_ptr<nsjsi::ArrayBuffer> generateEntropyBuffer(
       double byteLength) = 0;
-  virtual std::shared_ptr<margelo::nitro::Promise<std::string>>
+  virtual std::shared_ptr<nsjsi::Promise<std::string>>
   deriveKeyRoundsAsync(const std::string& secret, double rounds) = 0;
 
  protected:
@@ -61,4 +61,4 @@ class HybridDeviceSecureEnclaveSpec : public virtual margelo::nitro::HybridObjec
   }
 };
 
-}  // namespace margelo::nitro::nsnitro
+}  // namespace nsjsi::nsnitro

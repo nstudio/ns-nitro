@@ -1,3 +1,4 @@
+import './nitro-install';
 import {
   bootstrapApplication,
   provideNativeScriptHttpClient,

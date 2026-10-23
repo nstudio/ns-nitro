@@ -112,7 +112,7 @@ export interface NitroModulesGlobal {
 
 export interface BenchmarkLane {
   label: string;
-  pathway: 'nitro-proto' | 'nitro-cpp' | 'nitro-swift' | 'objc-classic' | 'reference';
+  pathway: 'nitro-v1' | 'nitro-proto' | 'nitro-cpp' | 'nitro-swift' | 'objc-classic' | 'reference';
   durationMs: number;
   opsPerSec: string;
   nsPerCall: string;
@@ -133,4 +133,19 @@ export interface BenchmarkCard {
   verificationNote: string;
   lanes: BenchmarkLane[];
   ranAt?: string;
+}
+
+/** Live results of the Nitro Modules v1 (nitro-core) showcase on the overview tab. */
+export interface NitroV1Showcase {
+  version: string;
+  buildType: string;
+  classNames: string[];
+  firingOrder: string;
+  isInstance: boolean;
+  isHybridObject: boolean;
+  telemetry: string;
+  synthKilobytes: number;
+  synthTotalMs: number;
+  jsBlockedMs: number;
+  running: boolean;
 }

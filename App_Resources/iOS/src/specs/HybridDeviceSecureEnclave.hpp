@@ -8,7 +8,7 @@
 #include <thread>
 #include <vector>
 
-#include <NitroModules/HybridObjectRegistry.hpp>
+#include <JSIShim/HybridObjectRegistry.hpp>
 #include "specs/HybridDeviceSecureEnclaveSpec.hpp"
 
 extern "C" {
@@ -23,7 +23,7 @@ int32_t nitro_swift_aes_gcm_seal(const uint8_t* plaintextPtr,
 void nitro_swift_fill_entropy(uint8_t* bufferPtr, intptr_t byteLength);
 }
 
-namespace margelo::nitro::nsnitro {
+namespace nsjsi::nsnitro {
 
 class HybridDeviceSecureEnclave final : public HybridDeviceSecureEnclaveSpec {
  public:
@@ -82,23 +82,23 @@ class HybridDeviceSecureEnclave final : public HybridDeviceSecureEnclaveSpec {
     return std::string(outHex.data(), static_cast<size_t>(sealedBytes * 2));
   }
 
-  std::shared_ptr<margelo::nitro::ArrayBuffer> generateEntropyBuffer(
+  std::shared_ptr<nsjsi::ArrayBuffer> generateEntropyBuffer(
       double byteLength) override {
     size_t clampedBytes =
         std::clamp(static_cast<size_t>(byteLength), size_t{16}, size_t{1048576});
-    auto buffer = margelo::nitro::ArrayBuffer::allocate(clampedBytes);
+    auto buffer = nsjsi::ArrayBuffer::allocate(clampedBytes);
     nitro_swift_fill_entropy(buffer->data(),
                              static_cast<intptr_t>(buffer->size()));
     opsExecuted_.fetch_add(1, std::memory_order_relaxed);
     return buffer;
   }
 
-  std::shared_ptr<margelo::nitro::Promise<std::string>> deriveKeyRoundsAsync(
+  std::shared_ptr<nsjsi::Promise<std::string>> deriveKeyRoundsAsync(
       const std::string& secret, double rounds) override {
     int totalRounds = std::clamp(static_cast<int>(rounds), 1, 50000);
     auto self = std::dynamic_pointer_cast<HybridDeviceSecureEnclave>(
         shared_from_this());
-    return margelo::nitro::Promise<std::string>::async(
+    return nsjsi::Promise<std::string>::async(
         [self, secret, totalRounds]() -> std::string {
           std::string current = secret;
           const std::string salt = "ns-nitro-hkdf-salt";
@@ -120,9 +120,9 @@ class HybridDeviceSecureEnclave final : public HybridDeviceSecureEnclaveSpec {
   }
 
   static void registerInRegistry() {
-    margelo::nitro::HybridObjectRegistry::registerHybridObjectConstructor(
+    nsjsi::HybridObjectRegistry::registerHybridObjectConstructor(
         HybridDeviceSecureEnclaveSpec::TAG,
-        []() -> std::shared_ptr<margelo::nitro::HybridObject> {
+        []() -> std::shared_ptr<nsjsi::HybridObject> {
           return std::make_shared<HybridDeviceSecureEnclave>();
         });
   }
@@ -131,4 +131,4 @@ class HybridDeviceSecureEnclave final : public HybridDeviceSecureEnclaveSpec {
   std::atomic<int64_t> opsExecuted_{0};
 };
 
-}  // namespace margelo::nitro::nsnitro
+}  // namespace nsjsi::nsnitro

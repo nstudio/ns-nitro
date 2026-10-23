@@ -10,7 +10,7 @@ import {
   SwiftEngine,
   SwiftTaskGroupResult,
 } from './nitro.types';
-import { DeviceSecureEnclave } from '../../specs/DeviceSecureEnclave.nitro';
+import { DeviceSecureEnclave } from '../../specs/DeviceSecureEnclave.shim';
 
 // Pure JS/V8 fast SHA-256 & HMAC-SHA256 operating directly on Uint8Array / ArrayBuffer
 const K256 = new Uint32Array([

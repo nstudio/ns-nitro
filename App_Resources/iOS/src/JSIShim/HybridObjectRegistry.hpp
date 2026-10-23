@@ -8,9 +8,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include <NitroModules/HybridObject.hpp>
+#include <JSIShim/HybridObject.hpp>
 
-namespace margelo::nitro {
+namespace nsjsi {
 
 class HybridObjectRegistry final {
  public:
@@ -65,4 +65,4 @@ class HybridObjectRegistry final {
   }
 };
 
-}  // namespace margelo::nitro
+}  // namespace nsjsi

@@ -18,8 +18,6 @@ import { RallyAudioEngine } from './rally-audio';
 import { drawRallyOverlay } from './rally-car-painter';
 import { RallyGpuField } from './rally-gpu';
 
-const FLYBY_DURATION_MS = 2150;
-
 @Component({
   selector: 'ns-rally-stage',
   templateUrl: './rally-stage.component.html',
@@ -199,7 +197,8 @@ export class RallyStageComponent {
     const now = Date.now();
     const timeSec = (now - this.startedAt) / 1000;
     const elapsedFlyby = now - this.flybyStartedAt;
-    const inFlyby = elapsedFlyby >= 0 && elapsedFlyby <= FLYBY_DURATION_MS;
+    const flybyDurationMs = this.audio.flybyDurationMs;
+    const inFlyby = elapsedFlyby >= 0 && elapsedFlyby <= flybyDurationMs;
 
     if (this.isFlyingBy() !== inFlyby) {
       this.isFlyingBy.set(inFlyby);
@@ -220,7 +219,7 @@ export class RallyStageComponent {
     let flybyProgress = 0;
 
     if (inFlyby) {
-      const p = elapsedFlyby / FLYBY_DURATION_MS;
+      const p = elapsedFlyby / flybyDurationMs;
       flybyProgress = p;
 
       // Two-stage trajectory:
@@ -251,10 +250,12 @@ export class RallyStageComponent {
         cameraShake = (1 - smooth) * 0.4;
       }
 
-      const targetRpm = Math.round(5800 + 2700 * Math.sin(p * Math.PI));
+      // The C++ synthesizer's own engine state at this point of the flyby, so the gauges match the audio.
+      const telemetry = this.audio.quattro.telemetryAt(elapsedFlyby / 1000);
+      const targetRpm = Math.round(telemetry.rpm);
       if (Math.abs(targetRpm - this.liveRpm()) > 90) {
         this.liveRpm.set(targetRpm);
-        this.liveBoostBar.set(Number((1.6 + 0.9 * Math.sin(p * Math.PI)).toFixed(1)));
+        this.liveBoostBar.set(Number(telemetry.boostBar.toFixed(1)));
       }
     } else if (this.liveRpm() !== 6800) {
       this.liveRpm.set(6800);

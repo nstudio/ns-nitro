@@ -11,7 +11,7 @@
 #include <NativeScript/runtime/EventLoop.h>
 #include <NativeScript/runtime/Runtime.h>
 
-namespace margelo::nitro {
+namespace nsjsi {
 
 template <typename TResult>
 class Promise final : public std::enable_shared_from_this<Promise<TResult>> {
@@ -94,4 +94,4 @@ class Promise final : public std::enable_shared_from_this<Promise<TResult>> {
   WorkFn workFn_;
 };
 
-}  // namespace margelo::nitro
+}  // namespace nsjsi

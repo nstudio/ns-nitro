@@ -21,7 +21,7 @@
 #include <NativeScript/runtime/Runtime.h>
 #include "v8.h"
 
-#include <NitroModules/HybridObjectRegistry.hpp>
+#include <JSIShim/HybridObjectRegistry.hpp>
 #include "specs/HybridDeviceSecureEnclave.hpp"
 
 using namespace facebook;
@@ -49,7 +49,7 @@ void nitro_swift_async_task_group(int32_t taskCount, int32_t iterationsPerTask,
                                   NitroSwiftAsyncCallback callback);
 }
 
-namespace margelo::nitro::nativescript {
+namespace nsjsi::nativescript {
 
 // ============================================================================
 // Global Lifecycle & Memory Telemetry Counters
@@ -823,7 +823,7 @@ static jsi::Object createNitroPrototypeComputeInstance(jsi::Runtime& rt,
 // Install globalThis.NitroModules on NativeScript's JSI V8Runtime
 // ============================================================================
 static bool installNitroModulesOnRuntime(jsi::Runtime& rt) {
-  margelo::nitro::nsnitro::HybridDeviceSecureEnclave::registerInRegistry();
+  nsjsi::nsnitro::HybridDeviceSecureEnclave::registerInRegistry();
 
   jsi::Object nitroModules(rt);
 
@@ -846,9 +846,9 @@ static bool installNitroModulesOnRuntime(jsi::Runtime& rt) {
                   "NitroModules.createHybridObject(name) requires a module name");
             }
             std::string name = args[0].asString(runtime).utf8(runtime);
-            if (margelo::nitro::HybridObjectRegistry::hasHybridObject(name)) {
+            if (nsjsi::HybridObjectRegistry::hasHybridObject(name)) {
               auto hybridObj =
-                  margelo::nitro::HybridObjectRegistry::createHybridObject(
+                  nsjsi::HybridObjectRegistry::createHybridObject(
                       name);
               g_activeHybridObjects.fetch_add(1, std::memory_order_relaxed);
               return hybridObj->toObject(runtime);
@@ -886,7 +886,7 @@ static bool installNitroModulesOnRuntime(jsi::Runtime& rt) {
             std::vector<std::string> names = {
                 "NitroCompute", "NitroPrototypeCompute", "SwiftEngine"};
             for (const auto& regName :
-                 margelo::nitro::HybridObjectRegistry::
+                 nsjsi::HybridObjectRegistry::
                      getAllRegisteredHybridObjectNames()) {
               names.push_back(regName);
             }
@@ -970,9 +970,16 @@ static bool installNitroModulesOnRuntime(jsi::Runtime& rt) {
   return true;
 }
 
-}  // namespace margelo::nitro::nativescript
+}  // namespace nsjsi::nativescript
+
+// From the NativeScriptNitro Swift package (nitro/host/include/NSNitroInstall.h).
+extern "C" bool NSNitroInstall(void);
 
 @implementation NSNitroBridge
+
++ (BOOL)installNitro {
+  return NSNitroInstall() ? YES : NO;
+}
 
 + (BOOL)install {
   std::shared_ptr<facebook::jsi::Runtime> jsiRuntime = [NSJSIRuntime runtime];
@@ -981,7 +988,7 @@ static bool installNitroModulesOnRuntime(jsi::Runtime& rt) {
     return NO;
   }
   bool ok =
-      margelo::nitro::nativescript::installNitroModulesOnRuntime(*jsiRuntime);
+      nsjsi::nativescript::installNitroModulesOnRuntime(*jsiRuntime);
   NSLog(@"[NSNitroBridge] Installed NitroModules JSI host on NativeScript V8 "
         @"Isolate (ok=%d)",
         ok);
@@ -989,7 +996,7 @@ static bool installNitroModulesOnRuntime(jsi::Runtime& rt) {
 }
 
 + (BOOL)isInstalled {
-  return margelo::nitro::nativescript::g_isInstalled ? YES : NO;
+  return nsjsi::nativescript::g_isInstalled ? YES : NO;
 }
 
 @end
@@ -1031,11 +1038,13 @@ static bool installNitroModulesOnRuntime(jsi::Runtime& rt) {
 // ============================================================================
 // APPLES-TO-APPLES (TSC): DIRECT C FUNCTION IMPLEMENTATIONS (NO OBJC_MSGSEND)
 // ============================================================================
-extern "C" double ns_direct_c_add(double a, double b) {
+// Only NativeScript's metadata references these (looked up with dlsym), so they
+// must survive dead-stripping and stay exported under release visibility.
+extern "C" __attribute__((used, visibility("default"))) double ns_direct_c_add(double a, double b) {
   return a + b;
 }
 
-extern "C" double ns_direct_c_dsp(void *bufferPtr,
+extern "C" __attribute__((used, visibility("default"))) double ns_direct_c_dsp(void *bufferPtr,
                                   int32_t floatCount,
                                   float gain,
                                   float drive) {
@@ -1059,7 +1068,7 @@ extern "C" double ns_direct_c_dsp(void *bufferPtr,
   return static_cast<double>(peak);
 }
 
-extern "C" int32_t ns_direct_c_format_utf8(const char *labelUtf8,
+extern "C" __attribute__((used, visibility("default"))) int32_t ns_direct_c_format_utf8(const char *labelUtf8,
                                            double score,
                                            int32_t index) {
   char buf[256];

@@ -8,11 +8,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include <NitroModules/ArrayBuffer.hpp>
-#include <NitroModules/Promise.hpp>
+#include <JSIShim/ArrayBuffer.hpp>
+#include <JSIShim/Promise.hpp>
 #include "jsi/jsi.h"
 
-namespace margelo::nitro {
+namespace nsjsi {
 
 class HybridObject;
 
@@ -195,4 +195,4 @@ struct JSIConverter<std::shared_ptr<Promise<TResult>>> {
   }
 };
 
-}  // namespace margelo::nitro
+}  // namespace nsjsi

@@ -1,4 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
+import { knownFolders } from '@nativescript/core';
 import {
   AudioDSPResult,
   AsyncPiResult,
@@ -9,12 +10,16 @@ import {
   NitroModulesGlobal,
   NitroPrototypeCompute,
   NitroRuntimeDiagnostics,
+  NitroV1Showcase,
   SimdParticleStepResult,
   SwiftEngine,
   SwiftTaskGroupResult,
 } from './nitro.types';
-import { DeviceSecureEnclave } from '../../specs/DeviceSecureEnclave.nitro';
+import { DeviceSecureEnclave } from '../../specs/DeviceSecureEnclave.shim';
 import { installAndroidNitroHostIfNeeded } from './android-nitro-host';
+import { NitroModules } from 'nitro-core';
+import { CxxBench, PlatformBench } from '../../specs/Bench.nitro';
+import { QuattroEngine } from '../../specs/QuattroEngine.nitro';
 
 declare const NSNitroBridge: any;
 declare const NSClassicObjCBridge: any;
@@ -26,6 +31,16 @@ declare const nitro_swift_add_numbers: any;
 declare const nitro_swift_simd_nbody_step: any;
 declare const interop: any;
 
+interface RawLane {
+  label: string;
+  pathway: BenchmarkLane['pathway'];
+  durationMs: number;
+  iterations: number;
+  badgeText: string;
+  accentClass: string;
+  barColor: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -34,6 +49,8 @@ export class NitroService {
   private nitroProtoCompute!: NitroPrototypeCompute;
   private swiftEngine!: SwiftEngine;
   private secureEnclave!: DeviceSecureEnclave;
+  private cxxBench!: CxxBench;
+  private platformBench!: PlatformBench;
 
   readonly isAndroid = __ANDROID__;
   readonly isReady = signal<boolean>(false);
@@ -42,6 +59,20 @@ export class NitroService {
   readonly isRunningBenchmarks = signal<boolean>(false);
   readonly isRunningAsync = signal<boolean>(false);
   readonly flybyTriggerCount = signal<number>(0);
+  readonly nitroV1 = signal<NitroV1Showcase>({
+    version: NitroModules.version,
+    buildType: NitroModules.buildType,
+    classNames: [],
+    firingOrder: '',
+    isInstance: false,
+    isHybridObject: false,
+    telemetry: '',
+    synthKilobytes: 0,
+    synthTotalMs: 0,
+    jsBlockedMs: 0,
+    running: false,
+  });
+  private nitroV1Seed = 100;
   readonly lastFlybyLabel = signal<string>(__ANDROID__ ? 'C++20 JSI vs JNI Suite' : 'Nitro JSI Suite');
 
   readonly diagnostics = signal<NitroRuntimeDiagnostics>({
@@ -73,7 +104,7 @@ export class NitroService {
     operationsExecuted: number;
     memorySize: number;
   }>({
-    specFile: 'src/specs/DeviceSecureEnclave.nitro.ts',
+    specFile: 'src/specs/DeviceSecureEnclave.shim.ts',
     hybridTag: 'DeviceSecureEnclave',
     enclaveArchitecture: '',
     hardwareConcurrency: 0,
@@ -184,6 +215,8 @@ export class NitroService {
       } else if (__ANDROID__) {
         installAndroidNitroHostIfNeeded();
       }
+      this.cxxBench = new CxxBench('BenchSuite');
+      this.platformBench = new PlatformBench();
 
       const nitro = this.nitroGlobal;
       if (!nitro) {
@@ -216,6 +249,8 @@ export class NitroService {
         this.triggerRallyFlyby('C++20 JSI + Zero-Copy DSP');
       }
 
+      // After the synchronous benchmarks, so its timing isn't spent waiting for the JS thread.
+      void this.runNitroV1Showcase();
       this.isReady.set(true);
       this.statusBanner.set(
         `ONLINE • ${nitro.hostPlatform} • V8 ${this.diagnostics().v8Version}`
@@ -459,6 +494,46 @@ export class NitroService {
     this.triggerRallyFlyby(`${count}x jsi::NativeState Burst`);
   }
 
+  // ==========================================================================
+  // NITRO MODULES V1 (nitro-core) SHOWCASE
+  // ==========================================================================
+  async runNitroV1Showcase(): Promise<void> {
+    if (this.nitroV1().running) return;
+    const engine = new QuattroEngine(44100);
+    const telemetry = engine.telemetryAt(1.1);
+    this.nitroV1.update((prev) => ({
+      ...prev,
+      classNames: NitroModules.getAllHybridClassNames().sort(),
+      firingOrder: QuattroEngine.firingOrder.join('-'),
+      isInstance: engine instanceof QuattroEngine,
+      isHybridObject: NitroModules.isHybridObject(engine),
+      telemetry: `${Math.round(telemetry.rpm)} rpm · ${telemetry.boostBar.toFixed(2)} bar · flutter ${telemetry.wastegateFlutter.toFixed(2)}`,
+      running: true,
+    }));
+
+    // synthesizeFlyby returns immediately; C++ synthesizes on Nitro's thread pool and the
+    // NativeScript dispatcher resolves the Promise back on the JS thread.
+    const t0 = performance.now();
+    const pending = engine.synthesizeFlyby(this.nitroV1Seed++);
+    const jsBlockedMs = performance.now() - t0;
+    try {
+      const pcm = await pending;
+      this.nitroV1.update((prev) => ({
+        ...prev,
+        synthKilobytes: Math.round(pcm.byteLength / 1024),
+        synthTotalMs: performance.now() - t0,
+        jsBlockedMs,
+        running: false,
+      }));
+      this.triggerRallyFlyby('Nitro v1 C++ QuattroEngine');
+    } catch (e) {
+      console.error('[NitroService] synthesizeFlyby failed:', e);
+      this.nitroV1.update((prev) => ({ ...prev, running: false }));
+    } finally {
+      engine.dispose();
+    }
+  }
+
   triggerRallyFlyby(label = 'Nitro JSI Benchmark'): void {
     this.lastFlybyLabel.set(label);
     this.flybyTriggerCount.update((c) => c + 1);
@@ -487,7 +562,7 @@ export class NitroService {
 
   private executeFullBenchmarkSuite(intensive: boolean): void {
     const nitro = this.nitroGlobal;
-    if (!nitro || !this.nitroCompute || !this.nitroProtoCompute || !this.swiftEngine) {
+    if (!nitro || !this.nitroCompute || !this.nitroProtoCompute || !this.swiftEngine || !this.cxxBench) {
       return;
     }
 
@@ -501,7 +576,7 @@ export class NitroService {
     const cards: BenchmarkCard[] = [
       this.benchScalarCalls(intensive ? 100000 : 50000),
       this.benchZeroCopySimdVsObjCData(intensive ? 50 : 25),
-      ...(__ANDROID__ ? [] : [this.benchCryptoKitSha256(intensive ? 800 : 400)]),
+      this.benchCryptoKitSha256(intensive ? 800 : 400),
       this.benchStringStructMarshaling(intensive ? 10000 : 4000),
       this.benchObjectLifecycleAndNativeState(intensive ? 1500 : 600),
     ];
@@ -510,12 +585,19 @@ export class NitroService {
     this.benchmarkCards.set(cards);
     this.refreshDiagnostics();
 
+    const report: string[] = [];
     for (const c of [...tscCards, ...cards]) {
       const lanesStr = c.lanes
-        .map((l) => `${l.badgeText}: ${l.durationMs}ms (${l.nsPerCall}, ${l.opsPerSec})`)
+        .map((l) => `${l.label} = ${l.durationMs}ms (${l.nsPerCall}, ${l.opsPerSec})`)
         .join(' | ');
-      console.log(`[BENCH:${c.id}] ${c.speedupHeadline} :: ${lanesStr}`);
+      const line = `[BENCH:${c.id}] ${c.iterationsLabel} :: ${c.speedupHeadline} :: ${lanesStr} :: ${c.verificationNote}`;
+      console.log(line);
+      report.push(line);
     }
+    // Release builds drop console output, so the latest run is also kept in benchmarks.txt: the app's
+    // Documents folder on iOS, and its external files folder on Android (readable over adb).
+    const reportFolder = __ANDROID__ ? knownFolders.externalDocuments() : knownFolders.documents();
+    reportFolder.getFile('benchmarks.txt').writeTextSync(report.join('\n') + '\n');
   }
 
   private formatOpsPerSec(iterations: number, durationMs: number): string {
@@ -531,17 +613,7 @@ export class NitroService {
     return `${Math.round(ns)} ns/call`;
   }
 
-  private buildLanes(
-    rawLanes: Array<{
-      label: string;
-      pathway: BenchmarkLane['pathway'];
-      durationMs: number;
-      iterations: number;
-      badgeText: string;
-      accentClass: string;
-      barColor: string;
-    }>
-  ): BenchmarkLane[] {
+  private buildLanes(rawLanes: RawLane[]): BenchmarkLane[] {
     const maxDuration = Math.max(...rawLanes.map((l) => l.durationMs), 0.01);
     return rawLanes.map((l) => ({
       label: l.label,
@@ -559,524 +631,428 @@ export class NitroService {
     }));
   }
 
-  // 1. Scalar Numeric Calls (addNumbers)
+  // Every card runs each lane for the same number of iterations and verifies they computed the same
+  // result. Lanes:
+  // - Nitro v1: Hybrid Objects generated by nitrogen and run by nitro-core, in C++ and in the
+  //   platform language (Swift on iOS, Kotlin on Android).
+  // - Hand-written JSI: the app's own JSIShim host functions (iOS) or raw JSI functions (Android),
+  //   only where that path is actually native.
+  // - Classic: NativeScript's metadata-driven interop (Objective-C/C on iOS, JNI on Android).
+
+  private readonly platformLanguage = __ANDROID__ ? 'Kotlin' : 'Swift';
+
+  private timeMs(run: () => void): number {
+    const t0 = performance.now();
+    run();
+    return Math.max(0.01, performance.now() - t0);
+  }
+
+  private get androidBridge(): any {
+    return (globalThis as any).org?.nativescript?.nsnitro?.NitroAndroidBridge;
+  }
+
+  // Raw JSI functions installed by ns-nitro-jni.cpp; absent if that library failed to load.
+  private get androidJsiBench(): any {
+    return (globalThis as any).__NS_NITRO_JNI_BENCH__;
+  }
+
+  private speedupCard(
+    lanes: RawLane[],
+    classicMs: number,
+  ): { headline: string; bestNitroMs: number } {
+    const nitroMs = lanes.filter((l) => l.pathway === 'nitro-v1').map((l) => l.durationMs);
+    const bestNitroMs = Math.min(...nitroMs);
+    return { headline: `${(classicMs / bestNitroMs).toFixed(1)}x Faster`, bestNitroMs };
+  }
+
+  private nitroV1Lane(
+    label: string,
+    durationMs: number,
+    iterations: number,
+    language: 'c++' | 'platform',
+  ): RawLane {
+    return {
+      label,
+      pathway: 'nitro-v1',
+      durationMs,
+      iterations,
+      badgeText: language === 'c++' ? 'NITRO C++' : `NITRO ${this.platformLanguage.toUpperCase()}`,
+      accentClass: language === 'c++' ? 'text-emerald-400' : 'text-cyan-400',
+      barColor: language === 'c++' ? '#10b981' : '#06b6d4',
+    };
+  }
+
+  private handWrittenLane(
+    label: string,
+    durationMs: number,
+    iterations: number,
+  ): RawLane {
+    return {
+      label,
+      pathway: 'nitro-cpp',
+      durationMs,
+      iterations,
+      badgeText: 'RAW JSI',
+      accentClass: 'text-indigo-400',
+      barColor: '#6366f1',
+    };
+  }
+
+  private classicLane(
+    label: string,
+    durationMs: number,
+    iterations: number,
+    badgeText: string,
+  ): RawLane {
+    return {
+      label,
+      pathway: 'objc-classic',
+      durationMs,
+      iterations,
+      badgeText,
+      accentClass: 'text-amber-400',
+      barColor: '#f59e0b',
+    };
+  }
+
+  // 1. Scalar Numeric Calls (add)
   private benchScalarCalls(iterations: number): BenchmarkCard {
-    const protoInstance = this.nitroProtoCompute;
-    const protoAdd = protoInstance.addNumbers;
-    const cppAdd = this.nitroCompute.addNumbers;
-    const swiftAdd = this.swiftEngine.addNumbers;
+    const cxx = this.cxxBench;
+    const platform = this.platformBench;
+    const handWritten = __ANDROID__ ? this.androidJsiBench?.jsiAddNumbers : this.nitroCompute.addNumbers;
+    const classicAdd: (a: number, b: number) => number = __ANDROID__
+      ? (a, b) => this.androidBridge.addNumbers(a, b)
+      : (a, b) => NSClassicObjCBridge.addNumbersB(a, b);
 
     for (let i = 0; i < 500; i++) {
-      protoAdd(i, 1);
-      cppAdd(i, 1);
-      if (!__ANDROID__) {
-        swiftAdd(i, 1);
-      }
+      cxx.add(i, 1);
+      platform.add(i, 1);
+      handWritten?.(i, 1);
+      classicAdd(i, 1);
     }
 
-    // Pathway A: Nitro JSI HostFunction (Direct C++20)
-    const tA0 = performance.now();
-    let accA = 0;
-    for (let i = 0; i < iterations; i++) {
-      accA = cppAdd(accA, 1.0);
-    }
-    const durCppDirect = Math.max(0.05, performance.now() - tA0);
+    let accCxx = 0;
+    const durCxx = this.timeMs(() => {
+      for (let i = 0; i < iterations; i++) accCxx = cxx.add(accCxx, 1.0);
+    });
+    let accPlatform = 0;
+    const durPlatform = this.timeMs(() => {
+      for (let i = 0; i < iterations; i++) accPlatform = platform.add(accPlatform, 1.0);
+    });
+    let accHand = 0;
+    const durHand = handWritten
+      ? this.timeMs(() => {
+          for (let i = 0; i < iterations; i++) accHand = handWritten(accHand, 1.0);
+        })
+      : 0;
+    let accClassic = 0;
+    const durClassic = this.timeMs(() => {
+      for (let i = 0; i < iterations; i++) accClassic = classicAdd(accClassic, 1.0);
+    });
 
-    // Pathway B: Nitro JSI Pure Swift 6 (@_cdecl direct, iOS only)
-    let durSwiftDirect = durCppDirect;
-    let accB = 0;
-    if (!__ANDROID__) {
-      const tB0 = performance.now();
-      for (let i = 0; i < iterations; i++) {
-        accB = swiftAdd(accB, 1.0);
-      }
-      durSwiftDirect = Math.max(0.05, performance.now() - tB0);
-    }
-
-    // Pathway C: Nitro JSI Prototype + jsi::NativeState unwrap
-    const tC0 = performance.now();
-    let accC = 0;
-    for (let i = 0; i < iterations; i++) {
-      accC = protoInstance.addNumbers(accC, 1.0);
-    }
-    const durProtoNativeState = Math.max(0.05, performance.now() - tC0);
-
-    // Pathway D: Classic NativeScript Metadata Interop (ObjC on iOS / JNI on Android)
-    const tD0 = performance.now();
-    let accD = 0;
-    if (typeof NSClassicObjCBridge !== 'undefined') {
-      for (let i = 0; i < iterations; i++) {
-        accD = NSClassicObjCBridge.addNumbersB(accD, 1.0);
-      }
-    } else if (__ANDROID__) {
-      const jMath = java.lang.Math;
-      const jIterations = Math.min(iterations, 5000);
-      const scale = iterations / jIterations;
-      for (let i = 0; i < jIterations; i++) {
-        accD += jMath.max(1.0, 1.0);
-      }
-      accD *= scale;
-    }
-    const durObjC = Math.max(
-      0.1,
-      (performance.now() - tD0) * (__ANDROID__ ? Math.max(1, iterations / 5000) : 1),
-    );
-
-    const bestNitro = __ANDROID__
-      ? durCppDirect
-      : Math.min(durCppDirect, durSwiftDirect);
-    const speedup = (durObjC / bestNitro).toFixed(1);
+    const lanes = [
+      this.nitroV1Lane('Nitro v1 → C++ HybridObject (CxxBench.add)', durCxx, iterations, 'c++'),
+      this.nitroV1Lane(`Nitro v1 → ${this.platformLanguage} HybridObject (PlatformBench.add)`, durPlatform, iterations, 'platform'),
+      ...(handWritten ? [this.handWrittenLane('Hand-written JSI HostFunction → C++', durHand, iterations)] : []),
+      this.classicLane(
+        __ANDROID__
+          ? 'Classic NativeScript JNI (NitroAndroidBridge.addNumbers)'
+          : 'Classic NativeScript ObjC Metadata (libffi + objc_msgSend)',
+        durClassic,
+        iterations,
+        'BASELINE',
+      ),
+    ];
+    const { headline, bestNitroMs } = this.speedupCard(lanes, durClassic);
+    const verified = accCxx === iterations && accPlatform === iterations && accClassic === iterations;
 
     return {
       id: 'scalar-100k',
-      title: 'Scalar Dispatch: addNumbers(a, b)',
-      subtitle: __ANDROID__
-        ? 'Tests raw JS-to-Native call overhead across JSI C++20 HostFunction, JSI NativeState unwrap, and Classic JNI Metadata dispatch.'
-        : 'Tests raw JS-to-Native call overhead across JSI C++20, JSI Pure Swift 6, JSI NativeState unwrap, and Classic ObjC Metadata FFI.',
+      title: 'Scalar Dispatch: add(a, b)',
+      subtitle: `Raw JS-to-native call overhead: Nitro v1 Hybrid Objects (C++ and ${this.platformLanguage}) vs a hand-written JSI function vs classic NativeScript ${__ANDROID__ ? 'JNI' : 'Objective-C'} interop.`,
       category: 'CALL DISPATCH',
       iterationsLabel: `${this.formatInt(iterations)} calls`,
-      speedupHeadline: `${speedup}x Faster`,
-      speedupDetail: `${bestNitro.toFixed(2)} ms (Nitro JSI) vs ${durObjC.toFixed(2)} ms (${__ANDROID__ ? 'Classic JNI' : 'Classic Metadata'})`,
-      verificationNote: __ANDROID__
-        ? `Verified checksums: C++=${accA}, NativeState=${accC}, Classic JNI=${accD}`
-        : `Verified checksums: C++=${accA}, Swift=${accB}, NativeState=${accC}, Classic=${accD}`,
+      speedupHeadline: headline,
+      speedupDetail: `${bestNitroMs.toFixed(2)} ms (Nitro v1) vs ${durClassic.toFixed(2)} ms (Classic ${__ANDROID__ ? 'JNI' : 'Metadata'})`,
+      verificationNote: `Checksums ${verified ? 'match' : 'MISMATCH'}: C++=${accCxx}, ${this.platformLanguage}=${accPlatform}${handWritten ? `, JSI=${accHand}` : ''}, Classic=${accClassic}`,
       ranAt: 'Live',
-      lanes: this.buildLanes([
-        {
-          label: 'Nitro JSI → C++20 HostFunction',
-          pathway: 'nitro-cpp',
-          durationMs: durCppDirect,
-          iterations,
-          badgeText: 'FASTEST',
-          accentClass: 'text-emerald-400',
-          barColor: '#10b981',
-        },
-        ...(__ANDROID__
-          ? []
-          : [
-              {
-                label: 'Nitro JSI → Pure Swift 6 (Zero-@objc)',
-                pathway: 'nitro-swift' as const,
-                durationMs: durSwiftDirect,
-                iterations,
-                badgeText: 'SWIFT 6',
-                accentClass: 'text-cyan-400',
-                barColor: '#06b6d4',
-              },
-            ]),
-        {
-          label: 'Nitro Prototype + jsi::NativeState Unwrap',
-          pathway: 'nitro-proto',
-          durationMs: durProtoNativeState,
-          iterations,
-          badgeText: 'STATEFUL',
-          accentClass: 'text-indigo-400',
-          barColor: '#6366f1',
-        },
-        {
-          label: __ANDROID__
-            ? 'Classic NativeScript JNI Metadata (java.lang.Math Dispatch)'
-            : 'Classic NativeScript ObjC Metadata (libffi + objc_msgSend)',
-          pathway: 'objc-classic',
-          durationMs: durObjC,
-          iterations,
-          badgeText: 'BASELINE',
-          accentClass: 'text-amber-400',
-          barColor: '#f59e0b',
-        },
-      ]),
+      lanes: this.buildLanes(lanes),
     };
   }
 
-  // 2. Zero-Copy ArrayBuffer DSP vs Classic ObjC NSMutableData / JNI ByteBuffer Bridge
+  // 2. Zero-copy ArrayBuffer DSP vs copying into NSMutableData / a direct ByteBuffer
   private benchZeroCopySimdVsObjCData(rounds: number): BenchmarkCard {
-    const floatCount = 16384; // 64 KB Float32 buffer (4,096 SIMD4 vectors)
-    const f32 = new Float32Array(floatCount);
+    const floatCount = 16384; // 64 KB Float32 frame
+    const source = new Float32Array(floatCount);
     for (let i = 0; i < floatCount; i++) {
-      f32[i] = (i % 100) * 0.01;
+      source[i] = Math.sin(i * 0.05) * 0.8;
     }
+    const gain = 1.01;
+    const drive = 1.2;
 
-    const stepSwift = this.swiftEngine.stepParticlesSIMDZeroCopy;
-    const dspCpp = this.nitroCompute.processAudioDSPZeroCopy;
+    const nitroFrame = new Float32Array(source);
+    let nitroPeak = 0;
+    const durNitro = this.timeMs(() => {
+      for (let r = 0; r < rounds; r++) nitroPeak = this.cxxBench.processDsp(nitroFrame.buffer, gain, drive).peak;
+    });
 
-    // Pathway A: Nitro JSI Zero-Copy ArrayBuffer -> C++20 DSP
-    const tA0 = performance.now();
-    let peak = 0;
-    for (let r = 0; r < rounds; r++) {
-      const res = dspCpp(f32.buffer, 1.01, 1.2);
-      peak = res.peak;
-    }
-    const durCppZeroCopy = Math.max(0.05, performance.now() - tA0);
-
-    // Pathway B: Nitro JSI Zero-Copy ArrayBuffer -> Pure Swift SIMD4<Float> + Accelerate vDSP (iOS only)
-    let durSwiftSimdZeroCopy = durCppZeroCopy;
-    let energy = 0;
+    let handPeak = 0;
+    let durHand = 0;
     if (!__ANDROID__) {
-      const tB0 = performance.now();
-      for (let r = 0; r < rounds; r++) {
-        const res = stepSwift(f32.buffer, 0.016, 2);
-        energy = res.totalEnergy;
-      }
-      durSwiftSimdZeroCopy = Math.max(0.05, performance.now() - tB0);
+      const handFrame = new Float32Array(source);
+      const dsp = this.nitroCompute.processAudioDSPZeroCopy;
+      durHand = this.timeMs(() => {
+        for (let r = 0; r < rounds; r++) handPeak = dsp(handFrame.buffer, gain, drive).peak;
+      });
     }
 
-    // Pathway C: Classic NativeScript NSMutableData / JNI ByteBuffer allocation + copy
-    const tC0 = performance.now();
-    let objcEnergy = 0;
-    if (typeof NSClassicObjCBridge !== 'undefined') {
+    // Classic: copy the frame into native memory each round, then run the same DSP natively.
+    const classicFrame = new Float32Array(source);
+    let classicPeak = 0;
+    const durClassic = this.timeMs(() => {
       for (let r = 0; r < rounds; r++) {
-        const nsData = NSMutableData.dataWithBytesLength(
-          f32.buffer as any,
-          f32.byteLength
-        );
-        objcEnergy = NSClassicObjCBridge.stepParticlesObjCDtSteps(
-          nsData,
-          0.016,
-          2
-        );
-      }
-    } else if (__ANDROID__) {
-      for (let r = 0; r < rounds; r++) {
-        const jBuf = java.nio.ByteBuffer.allocate(f32.byteLength);
-        jBuf.clear();
-        const copy = new Float32Array(floatCount);
-        copy.set(f32);
-        for (let i = 0; i < floatCount; i += 4) {
-          copy[i] += copy[i + 2] * 0.016;
-          objcEnergy += copy[i];
+        if (__ANDROID__) {
+          const direct = java.nio.ByteBuffer.allocateDirect(classicFrame.byteLength).order(java.nio.ByteOrder.nativeOrder());
+          const view = new Float32Array((ArrayBuffer as any).from(direct));
+          view.set(classicFrame);
+          classicPeak = this.androidBridge.processDspByteBuffer(direct, floatCount, gain, drive);
+          classicFrame.set(view);
+        } else {
+          const data = NSMutableData.dataWithBytesLength(classicFrame.buffer as any, classicFrame.byteLength);
+          classicPeak = ns_direct_c_dsp(data.mutableBytes, floatCount, gain, drive);
+          classicFrame.set(new Float32Array(interop.bufferFromData(data)));
         }
       }
-    }
-    const durObjCData = Math.max(0.1, performance.now() - tC0);
+    });
 
-    const bestZeroCopy = __ANDROID__
-      ? durCppZeroCopy
-      : Math.min(durCppZeroCopy, durSwiftSimdZeroCopy);
-    const speedup = (durObjCData / bestZeroCopy).toFixed(1);
+    const lanes = [
+      this.nitroV1Lane('Nitro v1 ArrayBuffer → C++ DSP (in place, 0 copies)', durNitro, rounds, 'c++'),
+      ...(__ANDROID__ ? [] : [this.handWrittenLane('Hand-written JSI rt.data() → C++ DSP', durHand, rounds)]),
+      this.classicLane(
+        __ANDROID__
+          ? 'Classic: copy into direct ByteBuffer → Java DSP → copy back'
+          : 'Classic: copy into NSMutableData → C DSP (ns_direct_c_dsp) → copy back',
+        durClassic,
+        rounds,
+        'DATA COPY',
+      ),
+    ];
+    const { headline, bestNitroMs } = this.speedupCard(lanes, durClassic);
 
     return {
       id: 'zerocopy-simd',
-      title: __ANDROID__
-        ? 'Zero-Copy ArrayBuffer C++20 Audio DSP'
-        : 'Zero-Copy ArrayBuffer DSP & Swift SIMD4',
-      subtitle: __ANDROID__
-        ? 'Mutates a 64 KB Float32Array directly in V8 BackingStore memory via rt.data(ArrayBuffer) vs Classic JNI java.nio.ByteBuffer marshaling.'
-        : 'Mutates a 64 KB Float32Array directly in V8 BackingStore memory via rt.data(ArrayBuffer) vs Classic NSMutableData marshaling.',
+      title: 'Zero-Copy ArrayBuffer Audio DSP',
+      subtitle: `Soft-clips and low-passes a 64 KB Float32 frame. Nitro v1 hands C++ the V8 backing store directly; classic interop copies the frame into ${__ANDROID__ ? 'a direct ByteBuffer' : 'NSMutableData'} and back each round. Same algorithm in every lane.`,
       category: 'ZERO-COPY MEMORY',
       iterationsLabel: `${rounds} frames × 64 KB`,
-      speedupHeadline: `${speedup}x Faster`,
-      speedupDetail: __ANDROID__
-        ? `Zero byte copies across V8 ↔ C++20 (${bestZeroCopy.toFixed(2)} ms vs ${durObjCData.toFixed(2)} ms)`
-        : `Zero byte copies across V8 ↔ C++20 / SIMD4 (${bestZeroCopy.toFixed(2)} ms vs ${durObjCData.toFixed(2)} ms)`,
-      verificationNote: __ANDROID__
-        ? `BackingStore mutated in-place • Peak=${peak.toFixed(3)} • 64 KB Float32`
-        : `BackingStore mutated in-place • Energy=${energy.toFixed(1)} • Peak=${peak.toFixed(3)}`,
+      speedupHeadline: headline,
+      speedupDetail: `${bestNitroMs.toFixed(2)} ms (Nitro v1, 0 copies) vs ${durClassic.toFixed(2)} ms (copy in + out)`,
+      verificationNote: `Peaks: Nitro=${nitroPeak.toFixed(4)}${__ANDROID__ ? '' : `, JSI=${handPeak.toFixed(4)}`}, Classic=${classicPeak.toFixed(4)}`,
       ranAt: 'Live',
-      lanes: this.buildLanes([
-        {
-          label: 'Nitro Zero-Copy ArrayBuffer → C++20 Biquad DSP',
-          pathway: 'nitro-cpp',
-          durationMs: durCppZeroCopy,
-          iterations: rounds,
-          badgeText: '0-COPY C++',
-          accentClass: 'text-emerald-400',
-          barColor: '#10b981',
-        },
-        ...(__ANDROID__
-          ? []
-          : [
-              {
-                label: 'Nitro Zero-Copy ArrayBuffer → Pure Swift SIMD4 + vDSP',
-                pathway: 'nitro-swift' as const,
-                durationMs: durSwiftSimdZeroCopy,
-                iterations: rounds,
-                badgeText: '0-COPY SIMD',
-                accentClass: 'text-cyan-400',
-                barColor: '#06b6d4',
-              },
-            ]),
-        {
-          label: __ANDROID__
-            ? 'Classic JNI java.nio.ByteBuffer Copy + Heap Allocation'
-            : 'Classic ObjC NSMutableData Copy + Selector Dispatch',
-          pathway: 'objc-classic',
-          durationMs: durObjCData,
-          iterations: rounds,
-          badgeText: 'DATA COPY',
-          accentClass: 'text-amber-400',
-          barColor: '#f59e0b',
-        },
-      ]),
+      lanes: this.buildLanes(lanes),
     };
   }
 
-  // 3. Pure Swift CryptoKit.SHA256 vs Classic ObjC/JNI Bridge (8 KB Telemetry Frame)
+  // 3. SHA-256 of an 8 KB frame in the platform's crypto library
   private benchCryptoKitSha256(iterations: number): BenchmarkCard {
-    const chunk =
-      'NativeScript + NitroModules JSI Zero-Overhead Cryptographic Benchmark Payload 2026 | ';
-    const payload = chunk.repeat(96); // ~8 KB telemetry payload
+    const chunk = 'NativeScript + NitroModules JSI Zero-Overhead Cryptographic Benchmark Payload 2026 | ';
+    const payload = chunk.repeat(96);
     const bytes = new Uint8Array(payload.length);
     for (let i = 0; i < payload.length; i++) {
       bytes[i] = payload.charCodeAt(i) & 0xff;
     }
+    const platform = this.platformBench;
 
-    const sha256ZeroCopy = this.swiftEngine.sha256ZeroCopyBuffer;
-    const sha256Utf8 = this.swiftEngine.sha256;
+    let digestBuffer = '';
+    const durNitroBuffer = this.timeMs(() => {
+      for (let i = 0; i < iterations; i++) digestBuffer = platform.sha256(bytes.buffer);
+    });
+    let digestString = '';
+    const durNitroString = this.timeMs(() => {
+      for (let i = 0; i < iterations; i++) digestString = platform.sha256String(payload);
+    });
 
-    // Pathway A: JSI Zero-Copy ArrayBuffer -> Pure Swift CryptoKit.SHA256
-    const tA0 = performance.now();
-    let digestA = '';
-    for (let i = 0; i < iterations; i++) {
-      digestA = sha256ZeroCopy(bytes.buffer);
+    let digestHand = '';
+    let durHand = 0;
+    if (!__ANDROID__) {
+      const sha = this.swiftEngine.sha256ZeroCopyBuffer;
+      durHand = this.timeMs(() => {
+        for (let i = 0; i < iterations; i++) digestHand = sha(bytes.buffer);
+      });
     }
-    const durZeroCopyCrypto = Math.max(0.05, performance.now() - tA0);
 
-    // Pathway B: JSI UTF-8 String -> Pure Swift CryptoKit.SHA256
-    const tB0 = performance.now();
-    let digestB = '';
-    for (let i = 0; i < iterations; i++) {
-      digestB = sha256Utf8(payload);
-    }
-    const durUtf8Crypto = Math.max(0.05, performance.now() - tB0);
-
-    // Pathway C: Classic NativeScript @objc NSString / JNI MessageDigest
-    const tC0 = performance.now();
-    let digestC = '';
-    if (typeof NSClassicObjCBridge !== 'undefined') {
-      for (let i = 0; i < iterations; i++) {
-        digestC = NSClassicObjCBridge.sha256String(payload);
-      }
-    } else if (__ANDROID__) {
-      const md = java.security.MessageDigest.getInstance('SHA-256');
-      const jRounds = Math.min(iterations, 120);
-      for (let i = 0; i < jRounds; i++) {
-        const jStr = new java.lang.String(payload);
-        const out = md.digest(jStr.getBytes());
-        if (i === jRounds - 1 && out) {
-          digestC = digestA;
+    let digestClassic = '';
+    let lastJavaDigest: any = null;
+    const durClassic = this.timeMs(() => {
+      if (__ANDROID__) {
+        const md = java.security.MessageDigest.getInstance('SHA-256');
+        for (let i = 0; i < iterations; i++) {
+          lastJavaDigest = md.digest(new java.lang.String(payload).getBytes('UTF-8'));
         }
+      } else {
+        for (let i = 0; i < iterations; i++) digestClassic = NSClassicObjCBridge.sha256String(payload);
+      }
+    });
+    if (__ANDROID__ && lastJavaDigest) {
+      for (let i = 0; i < lastJavaDigest.length; i++) {
+        digestClassic += (lastJavaDigest[i] & 0xff).toString(16).padStart(2, '0');
       }
     }
-    const durObjCCrypto = Math.max(
-      0.1,
-      (performance.now() - tC0) * (__ANDROID__ ? Math.max(1, iterations / 120) : 1),
-    );
 
-    const speedup = (durObjCCrypto / durZeroCopyCrypto).toFixed(1);
+    const lanes = [
+      this.nitroV1Lane(`Nitro v1 ArrayBuffer → ${__ANDROID__ ? 'Kotlin MessageDigest' : 'Swift CryptoKit'}`, durNitroBuffer, iterations, 'platform'),
+      this.nitroV1Lane(`Nitro v1 string → ${__ANDROID__ ? 'Kotlin MessageDigest' : 'Swift CryptoKit'}`, durNitroString, iterations, 'platform'),
+      ...(__ANDROID__ ? [] : [this.handWrittenLane('Hand-written JSI rt.data() → Swift CryptoKit (@_cdecl)', durHand, iterations)]),
+      this.classicLane(
+        __ANDROID__
+          ? 'Classic JNI java.lang.String.getBytes() → MessageDigest'
+          : 'Classic @objc NSString bridge → CryptoKit',
+        durClassic,
+        iterations,
+        __ANDROID__ ? 'JNI COPY' : 'OBJC WRAPPER',
+      ),
+    ];
+    const { headline, bestNitroMs } = this.speedupCard(lanes, durClassic);
+    const verified =
+      digestBuffer === digestString && digestString === digestClassic && (__ANDROID__ || digestHand === digestBuffer);
 
     return {
       id: 'swift-cryptokit',
-      title: 'Apple CryptoKit SHA-256 (Pure Swift Struct)',
-      subtitle:
-        'Hashes an 8 KB telemetry frame via zero-copy JSI ArrayBuffer pointers vs Classic @objc NSString / JNI String.getBytes() copying.',
-      category: 'PURE SWIFT API',
+      title: __ANDROID__ ? 'SHA-256: Kotlin MessageDigest' : 'SHA-256: Apple CryptoKit (Pure Swift)',
+      subtitle: `Hashes an 8 KB telemetry frame with ${__ANDROID__ ? 'java.security.MessageDigest' : 'CryptoKit.SHA256'}, called through a Nitro v1 ${this.platformLanguage} Hybrid Object vs classic ${__ANDROID__ ? 'JNI' : 'Objective-C'} interop.`,
+      category: __ANDROID__ ? 'PLATFORM CRYPTO' : 'PURE SWIFT API',
       iterationsLabel: `${this.formatInt(iterations)} × 8 KB`,
-      speedupHeadline: `${speedup}x Faster`,
-      speedupDetail: `${durZeroCopyCrypto.toFixed(2)} ms (JSI 0-Copy) vs ${durObjCCrypto.toFixed(2)} ms (Classic Bridge)`,
-      verificationNote: `SHA-256: ${digestA.slice(0, 24)}... (verified=${digestA === digestB && digestB === digestC})`,
+      speedupHeadline: headline,
+      speedupDetail: `${bestNitroMs.toFixed(2)} ms (Nitro v1) vs ${durClassic.toFixed(2)} ms (Classic bridge)`,
+      verificationNote: `SHA-256 ${digestBuffer.slice(0, 24)}… (${verified ? 'all lanes match' : 'MISMATCH'})`,
       ranAt: 'Live',
-      lanes: this.buildLanes([
-        {
-          label: 'Nitro JSI Zero-Copy Buffer → Pure Swift CryptoKit',
-          pathway: 'nitro-swift',
-          durationMs: durZeroCopyCrypto,
-          iterations,
-          badgeText: 'FASTEST',
-          accentClass: 'text-cyan-400',
-          barColor: '#06b6d4',
-        },
-        {
-          label: 'Nitro JSI UTF-8 String → Pure Swift CryptoKit',
-          pathway: 'nitro-cpp',
-          durationMs: durUtf8Crypto,
-          iterations,
-          badgeText: 'UTF-8 JSI',
-          accentClass: 'text-emerald-400',
-          barColor: '#10b981',
-        },
-        {
-          label: __ANDROID__
-            ? 'Classic JNI java.lang.String.getBytes() → MessageDigest'
-            : 'Classic @objc NSString Bridge → CryptoKit Wrapper',
-          pathway: 'objc-classic',
-          durationMs: durObjCCrypto,
-          iterations,
-          badgeText: __ANDROID__ ? 'JNI COPY' : 'OBJC WRAPPER',
-          accentClass: 'text-amber-400',
-          barColor: '#f59e0b',
-        },
-      ]),
+      lanes: this.buildLanes(lanes),
     };
   }
 
-  // 4. String & Record Marshaling
+  // 4. String formatting round trips
   private benchStringStructMarshaling(iterations: number): BenchmarkCard {
-    const formatCpp = this.nitroCompute.formatRecord;
+    const cxx = this.cxxBench;
+    const platform = this.platformBench;
+    const handWritten = __ANDROID__ ? this.androidJsiBench?.jsiFormatRecord : this.nitroCompute.formatRecord;
+    const classicFormat: (label: string, score: number, index: number) => string = __ANDROID__
+      ? (label, score, index) => this.androidBridge.formatRecord(label, score, index)
+      : (label, score, index) => NSClassicObjCBridge.formatRecordScoreIndex(label, score, index);
 
-    const tA0 = performance.now();
-    let lastA = '';
-    for (let i = 0; i < iterations; i++) {
-      lastA = formatCpp('TelemetryFrame', 0.984, i);
-    }
-    const durNitroStr = Math.max(0.05, performance.now() - tA0);
+    let lastCxx = '';
+    const durCxx = this.timeMs(() => {
+      for (let i = 0; i < iterations; i++) lastCxx = cxx.formatRecord('TelemetryFrame', 0.984, i);
+    });
+    let lastPlatform = '';
+    const durPlatform = this.timeMs(() => {
+      for (let i = 0; i < iterations; i++) lastPlatform = platform.formatRecord('TelemetryFrame', 0.984, i);
+    });
+    let lastHand = '';
+    const durHand = handWritten
+      ? this.timeMs(() => {
+          for (let i = 0; i < iterations; i++) lastHand = handWritten('TelemetryFrame', 0.984, i);
+        })
+      : 0;
+    let lastClassic = '';
+    const durClassic = this.timeMs(() => {
+      for (let i = 0; i < iterations; i++) lastClassic = classicFormat('TelemetryFrame', 0.984, i);
+    });
 
-    const tB0 = performance.now();
-    let lastB = '';
-    if (typeof NSClassicObjCBridge !== 'undefined') {
-      for (let i = 0; i < iterations; i++) {
-        lastB = NSClassicObjCBridge.formatRecordScoreIndex(
-          'TelemetryFrame',
-          0.984,
-          i
-        );
-      }
-    } else if (__ANDROID__) {
-      const jRounds = Math.min(iterations, 800);
-      for (let i = 0; i < jRounds; i++) {
-        const sb = new java.lang.StringBuilder('[JNI] TelemetryFrame#');
-        sb.append(i);
-        lastB = sb.toString();
-      }
-    }
-    const durObjCStr = Math.max(
-      0.1,
-      (performance.now() - tB0) * (__ANDROID__ ? Math.max(1, iterations / 800) : 1),
-    );
-
-    const speedup = (durObjCStr / durNitroStr).toFixed(1);
+    const lanes = [
+      this.nitroV1Lane('Nitro v1 → C++ (std::string)', durCxx, iterations, 'c++'),
+      this.nitroV1Lane(`Nitro v1 → ${this.platformLanguage} (String)`, durPlatform, iterations, 'platform'),
+      ...(handWritten ? [this.handWrittenLane('Hand-written JSI → C++ UTF-8', durHand, iterations)] : []),
+      this.classicLane(
+        __ANDROID__ ? 'Classic JNI java.lang.String ↔ V8 string' : 'Classic NSString ↔ V8 string',
+        durClassic,
+        iterations,
+        __ANDROID__ ? 'JNI STRING' : 'NSSTRING',
+      ),
+    ];
+    const { headline, bestNitroMs } = this.speedupCard(lanes, durClassic);
 
     return {
       id: 'string-marshaling',
-      title: 'UTF-8 String & Record Marshaling',
-      subtitle: __ANDROID__
-        ? 'Compares direct V8 UTF-8 string conversion in JSI against Classic JNI StringBuilder / jstring bridging.'
-        : 'Compares direct V8 UTF-8 string conversion in JSI against CFString/NSString bridging.',
+      title: 'String Marshaling Round Trips',
+      subtitle: `Passes a string and two numbers in and formats a string back out, through Nitro v1 (C++ and ${this.platformLanguage}), a hand-written JSI function and classic ${__ANDROID__ ? 'JNI' : 'NSString'} bridging.`,
       category: 'DATA CONVERSION',
       iterationsLabel: `${this.formatInt(iterations)} roundtrips`,
-      speedupHeadline: `${speedup}x Faster`,
-      speedupDetail: `${durNitroStr.toFixed(2)} ms (JSI UTF-8) vs ${durObjCStr.toFixed(2)} ms (${__ANDROID__ ? 'Classic JNI' : 'Classic Bridging'})`,
-      verificationNote: `Sample output: "${lastA}" vs "${lastB}"`,
+      speedupHeadline: headline,
+      speedupDetail: `${bestNitroMs.toFixed(2)} ms (Nitro v1) vs ${durClassic.toFixed(2)} ms (Classic)`,
+      verificationNote: `"${lastCxx}" · "${lastPlatform}"${handWritten ? ` · "${lastHand}"` : ''} · "${lastClassic}"`,
       ranAt: 'Live',
-      lanes: this.buildLanes([
-        {
-          label: 'Nitro JSI UTF-8 C++20 Formatter',
-          pathway: 'nitro-cpp',
-          durationMs: durNitroStr,
-          iterations,
-          badgeText: 'UTF-8 DIRECT',
-          accentClass: 'text-emerald-400',
-          barColor: '#10b981',
-        },
-        {
-          label: __ANDROID__
-            ? 'Classic NativeScript JNI StringBuilder ↔ V8 String Marshaling'
-            : 'Classic NativeScript NSString ↔ V8 String Marshaling',
-          pathway: 'objc-classic',
-          durationMs: durObjCStr,
-          iterations,
-          badgeText: __ANDROID__ ? 'JNI STRING' : 'NSSTRING',
-          accentClass: 'text-amber-400',
-          barColor: '#f59e0b',
-        },
-      ]),
+      lanes: this.buildLanes(lanes),
     };
   }
 
-  // 5. Native Object Creation + jsi::NativeState Attachment & Deterministic Disposal
+  // 5. Native object creation and deterministic disposal
   private benchObjectLifecycleAndNativeState(iterations: number): BenchmarkCard {
-    const nitro = this.nitroGlobal!;
-    const createHybrid = nitro.createHybridObject;
-
-    // Pathway A: Nitro HostObject allocation + property read
-    const tB0 = performance.now();
-    let totalMem = 0;
-    for (let i = 0; i < iterations; i++) {
-      const obj = createHybrid<NitroCompute>('NitroCompute');
-      totalMem += obj.memorySize;
-    }
-    const durHostObject = Math.max(0.05, performance.now() - tB0);
-
-    // Pathway B: Nitro Prototype + jsi::NativeState + setExternalMemoryPressure + dispose()
-    const tA0 = performance.now();
-    for (let i = 0; i < iterations; i++) {
-      const obj = createHybrid<NitroPrototypeCompute>(
-        'NitroPrototypeCompute',
-        'BenchState',
-        1024
-      );
-      obj.dispose();
-    }
-    const durNativeState = Math.max(0.05, performance.now() - tA0);
-
-    // Pathway C: Classic NativeScript NSObject / JNI HashMap allocation + state fields + cleanup
-    const tC0 = performance.now();
-    if (__APPLE__ && typeof NSMutableDictionary !== 'undefined') {
+    let tagLength = 0;
+    const durCxx = this.timeMs(() => {
       for (let i = 0; i < iterations; i++) {
-        const dict = NSMutableDictionary.alloc().initWithCapacity(3);
-        dict.setObjectForKey('BenchState', 'tag');
-        dict.setObjectForKey(1024, 'memoryBytes');
-        dict.setObjectForKey(i, 'instanceId');
-        dict.removeAllObjects();
+        const bench = new CxxBench('BenchState');
+        tagLength += bench.tag.length;
+        bench.dispose();
       }
-    } else if (__ANDROID__) {
-      const jRounds = Math.min(iterations, 400);
-      for (let i = 0; i < jRounds; i++) {
-        const map = new java.util.HashMap(4);
-        map.put('tag', 'BenchState');
-        map.put('memoryBytes', java.lang.Integer.valueOf(1024));
-        map.clear();
+    });
+    const durPlatform = this.timeMs(() => {
+      for (let i = 0; i < iterations; i++) {
+        new PlatformBench().dispose();
       }
-    }
-    const durObjCAlloc = Math.max(
-      0.1,
-      (performance.now() - tC0) * (__ANDROID__ ? Math.max(1, iterations / 400) : 1),
-    );
+    });
 
-    const bestNitroAlloc = Math.min(durNativeState, durHostObject);
-    const speedup = (durObjCAlloc / bestNitroAlloc).toFixed(1);
+    let durHand = 0;
+    if (!__ANDROID__) {
+      const nitro = this.nitroGlobal!;
+      durHand = this.timeMs(() => {
+        for (let i = 0; i < iterations; i++) {
+          nitro.createHybridObject<NitroPrototypeCompute>('NitroPrototypeCompute', 'BenchState', 1024).dispose();
+        }
+      });
+    }
+
+    const durClassic = this.timeMs(() => {
+      if (__ANDROID__) {
+        for (let i = 0; i < iterations; i++) {
+          const map = new java.util.HashMap(4);
+          map.put('tag', 'BenchState');
+          map.put('memoryBytes', java.lang.Integer.valueOf(1024));
+          map.clear();
+        }
+      } else {
+        for (let i = 0; i < iterations; i++) {
+          const dict = NSMutableDictionary.alloc().initWithCapacity(3);
+          dict.setObjectForKey('BenchState', 'tag');
+          dict.setObjectForKey(1024, 'memoryBytes');
+          dict.removeAllObjects();
+        }
+      }
+    });
+
+    const lanes = [
+      this.nitroV1Lane('Nitro v1 new CxxBench() + read + dispose()', durCxx, iterations, 'c++'),
+      this.nitroV1Lane(`Nitro v1 new PlatformBench() (${this.platformLanguage}) + dispose()`, durPlatform, iterations, 'platform'),
+      ...(__ANDROID__ ? [] : [this.handWrittenLane('Hand-written JSI NativeState object + dispose()', durHand, iterations)]),
+      this.classicLane(
+        __ANDROID__ ? 'Classic JNI java.util.HashMap state + clear()' : 'Classic ObjC NSMutableDictionary state + clear',
+        durClassic,
+        iterations,
+        __ANDROID__ ? 'JNI ALLOC' : 'OBJC ALLOC',
+      ),
+    ];
+    const { headline, bestNitroMs } = this.speedupCard(lanes, durClassic);
 
     return {
       id: 'nativestate-lifecycle',
-      title: 'HybridObject & jsi::NativeState Lifecycle',
-      subtitle:
-        'Tests creation, C++ pointer unwrapping, V8 external memory accounting, and deterministic .dispose() teardown.',
+      title: 'Native Object Lifecycle',
+      subtitle: `Creates a native object with state from JS, reads it and disposes it deterministically: Nitro v1 \`new\` (jsi::NativeState + prototype) vs classic ${__ANDROID__ ? 'JNI' : 'Objective-C'} allocation.`,
       category: 'OBJECT LIFETIME',
       iterationsLabel: `${this.formatInt(iterations)} instances`,
-      speedupHeadline: `${speedup}x Faster`,
-      speedupDetail: `${bestNitroAlloc.toFixed(2)} ms (Nitro JSI HostObject) vs ${durObjCAlloc.toFixed(2)} ms (${__ANDROID__ ? 'JNI java.util.HashMap' : 'ObjC NSMutableDictionary'})`,
-      verificationNote: `Tracked memory=${this.formatInt(totalMem)} B • Disposed: ${this.formatInt(this.diagnostics().disposedNativeStates)} NativeStates`,
+      speedupHeadline: headline,
+      speedupDetail: `${bestNitroMs.toFixed(2)} ms (Nitro v1) vs ${durClassic.toFixed(2)} ms (${__ANDROID__ ? 'JNI java.util.HashMap' : 'ObjC NSMutableDictionary'})`,
+      verificationNote: `Read ${this.formatInt(tagLength)} tag characters across ${this.formatInt(iterations)} C++ instances`,
       ranAt: 'Live',
-      lanes: this.buildLanes([
-        {
-          label: 'Nitro HostObject Create + Property Read',
-          pathway: 'nitro-cpp',
-          durationMs: durHostObject,
-          iterations,
-          badgeText: 'HOSTOBJECT',
-          accentClass: 'text-emerald-400',
-          barColor: '#10b981',
-        },
-        {
-          label: 'Nitro Prototype + jsi::NativeState + MemoryPressure + Dispose',
-          pathway: 'nitro-proto',
-          durationMs: durNativeState,
-          iterations,
-          badgeText: 'NATIVESTATE',
-          accentClass: 'text-indigo-400',
-          barColor: '#6366f1',
-        },
-        {
-          label: __ANDROID__
-            ? 'Classic JNI java.util.HashMap State Wrapper + Cleanup'
-            : 'Classic ObjC NSMutableDictionary State Wrapper + Cleanup',
-          pathway: 'objc-classic',
-          durationMs: durObjCAlloc,
-          iterations,
-          badgeText: __ANDROID__ ? 'JNI ALLOC' : 'OBJC ALLOC',
-          accentClass: 'text-amber-400',
-          barColor: '#f59e0b',
-        },
-      ]),
+      lanes: this.buildLanes(lanes),
     };
   }
 

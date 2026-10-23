@@ -8,6 +8,15 @@ export default {
     v8Flags: '--expose_gc',
     markingMode: 'none'
   },
+  ios: {
+    SPMPackages: [
+      {
+        name: 'NativeScriptNitro',
+        libs: ['NativeScriptNitro'],
+        path: '.',
+      },
+    ],
+  },
   bundler: 'vite',
   bundlerConfigPath: 'vite.config.mts',
 } as NativeScriptConfig;

@@ -7,11 +7,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include <NitroModules/JSIConverter.hpp>
-#include <NitroModules/Prototype.hpp>
+#include <JSIShim/JSIConverter.hpp>
+#include <JSIShim/Prototype.hpp>
 #include "jsi/jsi.h"
 
-namespace margelo::nitro {
+namespace nsjsi {
 
 class HybridObject : public facebook::jsi::HostObject,
                      public facebook::jsi::NativeState,
@@ -177,4 +177,4 @@ struct JSIConverter<
   }
 };
 
-}  // namespace margelo::nitro
+}  // namespace nsjsi
